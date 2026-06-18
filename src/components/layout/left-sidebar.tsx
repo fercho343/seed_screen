@@ -66,7 +66,7 @@ export function LeftSidebar() {
 	};
 
 	return (
-		<aside className="flex w-70 shrink-0 flex-col overflow-hidden rounded-lg bg-card">
+		<aside className="flex w-70 pt-2 shrink-0 flex-col overflow-hidden rounded-lg bg-card">
 			<Tabs defaultValue="songs" className="flex flex-1 flex-col gap-0 overflow-hidden">
 				<TabsList
 					variant="line"

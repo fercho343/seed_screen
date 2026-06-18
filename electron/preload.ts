@@ -20,7 +20,21 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
 		const [channel, ...omit] = args;
 		return ipcRenderer.invoke(channel, ...omit);
 	},
+	removeAllListeners(...args: Parameters<typeof ipcRenderer.removeAllListeners>) {
+		return ipcRenderer.removeAllListeners(...args);
+	},
 
 	// You can expose other APTs you need here.
 	// ...
+});
+
+contextBridge.exposeInMainWorld("electronAPI", {
+	settingsGetAll: () => ipcRenderer.invoke("settings:get-all"),
+	settingsSetTheme: (theme: string) => ipcRenderer.invoke("settings:set-theme", theme),
+	backgroundsAdd: (bg: { name: string; type: "color" | "gradient"; value: string }) =>
+		ipcRenderer.invoke("backgrounds:add", bg),
+	backgroundsDelete: (id: string) => ipcRenderer.invoke("backgrounds:delete", id),
+	syncGetLocalInfo: () => ipcRenderer.invoke("sync:get-local-info"),
+	syncSearchPeers: () => ipcRenderer.invoke("sync:search-peers"),
+	onOpenSettings: (cb: () => void) => ipcRenderer.on("open-settings", () => cb()),
 });

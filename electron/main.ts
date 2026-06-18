@@ -1,6 +1,23 @@
+import { randomUUID } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions } from "electron";
+import Store from "electron-store";
+import type { BackgroundItem } from "./electron-env";
+
+interface StoreSchema {
+	theme: string;
+	backgrounds: BackgroundItem[];
+}
+
+const store = new Store<StoreSchema>({
+	defaults: { theme: "marino", backgrounds: [] },
+});
+
+// In dev mode the app runs unpackaged, so Electron reports its own binary
+// name ("Electron") in the macOS menu bar unless we override it explicitly.
+app.setName("SeedScreen");
 
 // const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,7 +81,7 @@ app.on("window-all-closed", () => {
 
 const isMac = process.platform === "darwin";
 
-const templateMenu = [
+const templateMenu: MenuItemConstructorOptions[] = [
 	// En macOS, el primer menú suele ser el nombre de la app.
 	// Usamos el operador spread (...) para insertarlo solo si es Mac.
 	...(isMac
@@ -72,10 +89,14 @@ const templateMenu = [
 				{
 					label: app.name,
 					submenu: [
-						{ label: "Settings", accelerator: "CmdOrCtrl+," },
+						{
+							label: "Settings",
+							accelerator: "CmdOrCtrl+,",
+							click: () => win?.webContents.send("open-settings"),
+						},
 						{ label: "About", accelerator: "CmdOrCtrl+D" },
-						{ type: "separator" },
-						{ role: "quit", label: "Quit" },
+						{ type: "separator" as const },
+						{ role: "quit" as const, label: "Quit" },
 					],
 				},
 			]
@@ -91,7 +112,7 @@ const templateMenu = [
 					console.log("¡Hola desde el menú del proceso principal!");
 				},
 			},
-			{ type: "separator" },
+			{ type: "separator" as const },
 			{
 				label: "Save Service",
 				accelerator: "CmdOrCtrl+S",
@@ -122,7 +143,7 @@ const templateMenu = [
 				label: "Project",
 				accelerator: "CmdOrCtrl+P",
 			},
-			{ type: "separator" },
+			{ type: "separator" as const },
 			{
 				label: "Show black screen",
 				accelerator: "B",
@@ -134,6 +155,54 @@ const templateMenu = [
 		],
 	},
 ];
+
+function getLocalIp(): string {
+	const nets = os.networkInterfaces();
+	for (const ifaceList of Object.values(nets)) {
+		for (const addr of ifaceList ?? []) {
+			if (addr.family === "IPv4" && !addr.internal) return addr.address;
+		}
+	}
+	return "127.0.0.1";
+}
+
+ipcMain.handle("settings:get-all", () => ({
+	theme: store.get("theme"),
+	backgrounds: store.get("backgrounds"),
+}));
+
+ipcMain.handle("settings:set-theme", (_event, theme: string) => {
+	store.set("theme", theme);
+	return true;
+});
+
+ipcMain.handle(
+	"backgrounds:add",
+	(_event, bg: { name: string; type: "color" | "gradient"; value: string }) => {
+		const item: BackgroundItem = { id: randomUUID(), ...bg };
+		store.set("backgrounds", [...store.get("backgrounds"), item]);
+		return item;
+	},
+);
+
+ipcMain.handle("backgrounds:delete", (_event, id: string) => {
+	store.set(
+		"backgrounds",
+		store.get("backgrounds").filter((bg) => bg.id !== id),
+	);
+	return true;
+});
+
+ipcMain.handle("sync:get-local-info", () => ({
+	hostname: os.hostname(),
+	ip: getLocalIp(),
+	port: 3847,
+}));
+
+ipcMain.handle("sync:search-peers", async () => {
+	// LAN discovery server isn't wired up yet — surface an empty result for now.
+	return [];
+});
 
 app.on("activate", () => {
 	// On OS X it's common to re-create a window in the app when the

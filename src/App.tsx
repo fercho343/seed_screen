@@ -5,9 +5,9 @@ import { TopBar } from "@/components/layout/top-bar";
 
 function App() {
 	return (
-		<div className="dark flex h-screen flex-col overflow-hidden bg-background text-foreground">
+		<div className="dark flex h-screen flex-col overflow-hidden bg-app text-foreground">
 			<TopBar />
-			<div className="flex flex-1 gap-[3px] overflow-hidden p-[3px]">
+			<div className="flex flex-1 gap-0.5 overflow-hidden bg-background p-0.5">
 				<LeftSidebar />
 				<ServiceList />
 				<PreviewPanel />

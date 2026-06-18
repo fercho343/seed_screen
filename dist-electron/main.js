@@ -13,7 +13,7 @@ function createWindow() {
     width: 1920,
     height: 1080,
     backgroundColor: "#0e1b2e",
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: path.join(process.env.VITE_PUBLIC, "logo.png"),
     webPreferences: {
       preload: path.join(__dirname$1, "preload.mjs")
     }

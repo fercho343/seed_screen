@@ -1,5 +1,6 @@
 import { AlignCenter, AlignLeft, Bold, Italic, Monitor } from "lucide-react";
 import { useState } from "react";
+import Logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import {
 	Popover,
@@ -90,9 +91,11 @@ export function TopBar() {
 		<header className="flex h-12 shrink-0 items-center justify-between gap-3 bg-header px-4 text-header-foreground">
 			<div className="flex items-center gap-x-3">
 				<div className="flex items-center gap-2">
-					<div className="flex size-7 items-center justify-center rounded bg-primary text-xs font-bold text-primary-foreground">
-						C
-					</div>
+					<img
+						src={Logo}
+						alt="SeedScreen Logo"
+						className="size-8 rounded object-cover"
+					/>
 					<span className="text-sm font-semibold">SeedScreen</span>
 				</div>
 

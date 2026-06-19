@@ -101,3 +101,24 @@ export function deleteSong(id: number): boolean {
 	getDb().delete(songs).where(eq(songs.id, id)).run();
 	return true;
 }
+
+/** Insert incoming songs that aren't already present (matched by title + author). */
+export function importSongs(incoming: SongInput[]): { added: number; total: number } {
+	const key = (title: string, author: string) =>
+		`${title.trim().toLowerCase()}::${author.trim().toLowerCase()}`;
+	const existing = new Set(getSongs().map((s) => key(s.title, s.author)));
+	let added = 0;
+	for (const song of incoming ?? []) {
+		if (!song?.title) continue;
+		if (existing.has(key(song.title, song.author || ""))) continue;
+		addSong({
+			title: song.title,
+			author: song.author || "",
+			language: song.language || "es",
+			slides: song.slides || [],
+		});
+		existing.add(key(song.title, song.author || ""));
+		added++;
+	}
+	return { added, total: incoming?.length ?? 0 };
+}

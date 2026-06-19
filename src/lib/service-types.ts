@@ -2,6 +2,8 @@ export interface ServiceSlide {
 	id: string;
 	label: string;
 	text: string;
+	/** Small heading shown above the text on the output (e.g. a Bible reference). */
+	reference?: string;
 	/** Per-language translations of `text`, keyed by ISO 639-1 code. */
 	translations?: Record<string, string>;
 }

@@ -5,12 +5,20 @@ import { cn } from "@/lib/utils";
 interface PreviewCardProps {
 	label: string;
 	text?: string;
+	title?: string;
 	isLive?: boolean;
 	isEmpty?: boolean;
 	settings: SlideSettings;
 }
 
-export function PreviewCard({ label, text, isLive = false, isEmpty = true, settings }: PreviewCardProps) {
+export function PreviewCard({
+	label,
+	text,
+	title,
+	isLive = false,
+	isEmpty = true,
+	settings,
+}: PreviewCardProps) {
 	const { background, animated, fontSize, bold, italic, textAlign } = settings;
 	// Scaled down so the preview reflects the real on-screen proportions instead
 	// of rendering at the actual presentation font size inside a tiny card.
@@ -31,17 +39,24 @@ export function PreviewCard({ label, text, isLive = false, isEmpty = true, setti
 				</div>
 			) : (
 				<div className="absolute inset-0 flex items-center justify-center p-[8%]" style={{ textAlign }}>
-					<p
-						className="relative z-10 whitespace-pre-wrap text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]"
-						style={{
-							fontSize: previewFontSize,
-							fontWeight: bold ? 700 : 600,
-							fontStyle: italic ? "italic" : "normal",
-							lineHeight: 1.35,
-						}}
-					>
-						{text}
-					</p>
+					<div className="relative z-10">
+						{title && (
+							<p className="mb-1.5 text-[8px] font-bold tracking-widest text-white/70 uppercase [text-shadow:0_1px_4px_rgba(0,0,0,0.8)]">
+								{title}
+							</p>
+						)}
+						<p
+							className="whitespace-pre-wrap text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.9)]"
+							style={{
+								fontSize: previewFontSize,
+								fontWeight: bold ? 700 : 600,
+								fontStyle: italic ? "italic" : "normal",
+								lineHeight: 1.35,
+							}}
+						>
+							{text}
+						</p>
+					</div>
 				</div>
 			)}
 

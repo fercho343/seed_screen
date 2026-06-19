@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -12,8 +11,9 @@ import {
 	type MenuItemConstructorOptions,
 } from "electron";
 import Store from "electron-store";
-import { addSong, deleteSong, getSongs, type SongInput, updateSong } from "./db";
+import { addSong, deleteSong, getSongs, importSongs, type SongInput, updateSong } from "./db";
 import type { BackgroundItem } from "./electron-env";
+import * as sync from "./sync";
 
 interface StoreSchema {
 	theme: string;
@@ -269,16 +269,6 @@ const templateMenu: MenuItemConstructorOptions[] = [
 	},
 ];
 
-function getLocalIp(): string {
-	const nets = os.networkInterfaces();
-	for (const ifaceList of Object.values(nets)) {
-		for (const addr of ifaceList ?? []) {
-			if (addr.family === "IPv4" && !addr.internal) return addr.address;
-		}
-	}
-	return "127.0.0.1";
-}
-
 ipcMain.handle("settings:get-all", () => ({
 	theme: store.get("theme"),
 	backgrounds: store.get("backgrounds"),
@@ -306,16 +296,20 @@ ipcMain.handle("backgrounds:delete", (_event, id: string) => {
 	return true;
 });
 
-ipcMain.handle("sync:get-local-info", () => ({
-	hostname: os.hostname(),
-	ip: getLocalIp(),
-	port: 3847,
-}));
+ipcMain.handle("sync:get-local-info", () => sync.getLocalInfo());
+
+ipcMain.handle("sync:get-peers", () => sync.getPeers());
 
 ipcMain.handle("sync:search-peers", async () => {
-	// LAN discovery server isn't wired up yet — surface an empty result for now.
-	return [];
+	// Broadcast a fresh announce, then give peers a moment to reply before listing.
+	sync.reannounce();
+	await new Promise((r) => setTimeout(r, 2500));
+	return sync.getPeers();
 });
+
+ipcMain.handle("sync:fetch-songs", (_event, ip: string, port: number) => sync.fetchSongs(ip, port));
+
+ipcMain.handle("sync:import-songs", (_event, incoming: SongInput[]) => importSongs(incoming));
 
 ipcMain.handle("output:toggle", (_event, displayId?: number) => {
 	if (outputWin) {
@@ -423,4 +417,8 @@ app.whenReady().then(() => {
 
 	screen.on("display-added", () => win?.webContents.send("displays-changed"));
 	screen.on("display-removed", () => win?.webContents.send("displays-changed"));
+
+	sync.start((peer) => win?.webContents.send("sync-peer-found", peer));
 });
+
+app.on("before-quit", () => sync.stop());

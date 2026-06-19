@@ -11,16 +11,18 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
 var _validator, _encryptionKey, _options, _defaultValues, _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W, _X, _Y, _Z, __, _$, _aa, _ba, _ca, _da, _ea, _fa, _ga, _ha, _ia, _ja, _ka, _la, _ma, _na, _oa, _pa, _qa, _ra, _sa, _ta, _ua, _va, _wa, _xa, _ya, _za, _Aa, _Ba, _Ca, _Da, _Ea, _Fa, _Ga, _Ha, _Ia, _Ja, _Ka, _La, _Ma, _Na, _Oa, _Pa, _Qa, _Ra, _Sa, _Ta, _Ua, _Va, _Wa, _Xa, _Ya, _Za, __a, _$a, _ab, _bb, _cb, _db, _eb, _fb, _gb, _hb, _ib, _jb, _kb, _lb, _mb, _nb, _ob, _pb, _qb, _rb, _sb, _tb, _ub, _vb, _wb, _xb, _yb, _zb, _Ab, _Bb, _Cb, _Db, _Eb, _Fb, _Gb, _Hb, _Ib, _Jb, _Kb, _Lb, _Mb, _Nb, _Ob, _Pb, _Qb, _Rb, _Sb, _Tb, _Ub, _Vb, _Wb, _Xb, _Yb, _Zb, __b, _$b, _ac, _bc, _cc;
 import crypto$1, { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import electron, { app as app$1, ipcMain as ipcMain$1, screen, BrowserWindow, Menu } from "electron";
 import process$1 from "node:process";
 import { promisify, isDeepStrictEqual } from "node:util";
 import assert from "node:assert";
+import os from "node:os";
 import "node:events";
 import "node:stream";
 import Client from "better-sqlite3";
+import dgram from "node:dgram";
+import http$1 from "node:http";
 const isObject = (value) => {
   const type2 = typeof value;
   return value !== null && (type2 === "object" || type2 === "function");
@@ -20395,6 +20397,151 @@ function deleteSong(id2) {
   getDb().delete(songs).where(eq(songs.id, id2)).run();
   return true;
 }
+function importSongs(incoming) {
+  const key = (title2, author) => `${title2.trim().toLowerCase()}::${author.trim().toLowerCase()}`;
+  const existing = new Set(getSongs().map((s) => key(s.title, s.author)));
+  let added = 0;
+  for (const song of incoming ?? []) {
+    if (!(song == null ? void 0 : song.title)) continue;
+    if (existing.has(key(song.title, song.author || ""))) continue;
+    addSong({
+      title: song.title,
+      author: song.author || "",
+      language: song.language || "es",
+      slides: song.slides || []
+    });
+    existing.add(key(song.title, song.author || ""));
+    added++;
+  }
+  return { added, total: (incoming == null ? void 0 : incoming.length) ?? 0 };
+}
+const HTTP_PORT = 3847;
+const UDP_PORT = 3848;
+const APP_ID = "seedscreen";
+const peers = /* @__PURE__ */ new Map();
+let httpServer = null;
+let udpSocket = null;
+let announceTimer = null;
+function localIp() {
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const addr of addrs ?? []) {
+      if (addr.family === "IPv4" && !addr.internal) return addr.address;
+    }
+  }
+  return "127.0.0.1";
+}
+function announce() {
+  if (!udpSocket) return;
+  const msg = Buffer.from(
+    JSON.stringify({
+      app: APP_ID,
+      type: "hello",
+      hostname: os.hostname(),
+      port: HTTP_PORT,
+      songCount: getSongs().length
+    })
+  );
+  try {
+    udpSocket.send(msg, 0, msg.length, UDP_PORT, "255.255.255.255");
+  } catch {
+  }
+}
+function start(onPeer) {
+  if (!httpServer) {
+    httpServer = http$1.createServer((req, res) => {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      if (req.url === "/api/info") {
+        res.end(JSON.stringify({ hostname: os.hostname(), songCount: getSongs().length, port: HTTP_PORT, app: APP_ID }));
+      } else if (req.url === "/api/songs") {
+        res.end(JSON.stringify({ songs: getSongs() }));
+      } else {
+        res.writeHead(404);
+        res.end("{}");
+      }
+    });
+    httpServer.on("error", () => {
+    });
+    httpServer.listen(HTTP_PORT, "0.0.0.0");
+  }
+  if (!udpSocket) {
+    const self = localIp();
+    udpSocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+    udpSocket.on("error", () => {
+    });
+    udpSocket.on("message", (raw, rinfo) => {
+      if (rinfo.address === self) return;
+      try {
+        const data = JSON.parse(raw.toString());
+        if (data.app !== APP_ID || data.type !== "hello") return;
+        const peer = {
+          ip: rinfo.address,
+          hostname: data.hostname || rinfo.address,
+          port: data.port || HTTP_PORT,
+          songCount: data.songCount || 0,
+          lastSeen: Date.now()
+        };
+        peers.set(rinfo.address, peer);
+        onPeer == null ? void 0 : onPeer(peer);
+      } catch {
+      }
+    });
+    udpSocket.bind(UDP_PORT, () => {
+      udpSocket == null ? void 0 : udpSocket.setBroadcast(true);
+      announce();
+    });
+    announceTimer = setInterval(announce, 6e3);
+  }
+}
+function getLocalInfo() {
+  return { ip: localIp(), hostname: os.hostname(), port: HTTP_PORT, songCount: getSongs().length };
+}
+function getPeers() {
+  const cutoff = Date.now() - 2e4;
+  const active = [];
+  for (const [ip, peer] of peers) {
+    if (peer.lastSeen > cutoff) active.push(peer);
+    else peers.delete(ip);
+  }
+  return active;
+}
+function reannounce() {
+  announce();
+}
+function fetchSongs(ip, port) {
+  return new Promise((resolve2, reject) => {
+    const req = http$1.request(
+      { hostname: ip, port: port || HTTP_PORT, path: "/api/songs", method: "GET", timeout: 8e3 },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => {
+          data += c;
+        });
+        res.on("end", () => {
+          try {
+            resolve2(JSON.parse(data).songs ?? []);
+          } catch {
+            reject(new Error("Invalid response"));
+          }
+        });
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Timed out"));
+    });
+    req.on("error", (e) => reject(new Error(e.message)));
+    req.end();
+  });
+}
+function stop() {
+  if (announceTimer) clearInterval(announceTimer);
+  udpSocket == null ? void 0 : udpSocket.close();
+  httpServer == null ? void 0 : httpServer.close();
+  announceTimer = null;
+  udpSocket = null;
+  httpServer = null;
+}
 const store = new ElectronStore({
   defaults: { theme: "marino", backgrounds: [] }
 });
@@ -20629,15 +20776,6 @@ const templateMenu = [
     ]
   }
 ];
-function getLocalIp() {
-  const nets = os.networkInterfaces();
-  for (const ifaceList of Object.values(nets)) {
-    for (const addr of ifaceList ?? []) {
-      if (addr.family === "IPv4" && !addr.internal) return addr.address;
-    }
-  }
-  return "127.0.0.1";
-}
 ipcMain$1.handle("settings:get-all", () => ({
   theme: store.get("theme"),
   backgrounds: store.get("backgrounds")
@@ -20661,14 +20799,15 @@ ipcMain$1.handle("backgrounds:delete", (_event, id2) => {
   );
   return true;
 });
-ipcMain$1.handle("sync:get-local-info", () => ({
-  hostname: os.hostname(),
-  ip: getLocalIp(),
-  port: 3847
-}));
+ipcMain$1.handle("sync:get-local-info", () => getLocalInfo());
+ipcMain$1.handle("sync:get-peers", () => getPeers());
 ipcMain$1.handle("sync:search-peers", async () => {
-  return [];
+  reannounce();
+  await new Promise((r) => setTimeout(r, 2500));
+  return getPeers();
 });
+ipcMain$1.handle("sync:fetch-songs", (_event, ip, port) => fetchSongs(ip, port));
+ipcMain$1.handle("sync:import-songs", (_event, incoming) => importSongs(incoming));
 ipcMain$1.handle("output:toggle", (_event, displayId) => {
   if (outputWin) {
     outputWin.close();
@@ -20747,7 +20886,9 @@ app$1.whenReady().then(() => {
   Menu.setApplicationMenu(menu);
   screen.on("display-added", () => win == null ? void 0 : win.webContents.send("displays-changed"));
   screen.on("display-removed", () => win == null ? void 0 : win.webContents.send("displays-changed"));
+  start((peer) => win == null ? void 0 : win.webContents.send("sync-peer-found", peer));
 });
+app$1.on("before-quit", () => stop());
 export {
   MAIN_DIST,
   RENDERER_DIST,

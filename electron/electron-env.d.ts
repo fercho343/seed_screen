@@ -83,6 +83,7 @@ export interface SlideSettingsPayload {
 
 export interface LiveSlidePayload {
 	text: string;
+	title?: string;
 	settings: SlideSettingsPayload;
 }
 
@@ -96,7 +97,11 @@ export interface ElectronAPI {
 	}) => Promise<BackgroundItem>;
 	backgroundsDelete: (id: string) => Promise<boolean>;
 	syncGetLocalInfo: () => Promise<LocalSyncInfo>;
+	syncGetPeers: () => Promise<SyncPeer[]>;
 	syncSearchPeers: () => Promise<SyncPeer[]>;
+	syncFetchSongs: (ip: string, port: number) => Promise<SongRecord[]>;
+	syncImportSongs: (songs: SongRecord[]) => Promise<{ added: number; total: number }>;
+	onSyncPeerFound: (cb: (peer: SyncPeer) => void) => void;
 	onOpenSettings: (cb: () => void) => void;
 	bibleGetBooks: () => Promise<BibleBook[]>;
 	bibleGetChapter: (bookId: string, chapterNum: number) => Promise<BibleVerse[]>;

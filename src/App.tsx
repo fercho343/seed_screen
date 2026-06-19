@@ -24,6 +24,7 @@ function App() {
 	const [selectedSlide, setSelectedSlide] = useState<ServiceSlide | null>(null);
 	const [liveSlideId, setLiveSlideId] = useState<string | null>(null);
 	const [liveText, setLiveText] = useState<string | null>(null);
+	const [liveTitle, setLiveTitle] = useState<string | undefined>(undefined);
 	const [outputOpen, setOutputOpen] = useState(false);
 	const [displays, setDisplays] = useState<DisplayInfo[]>([]);
 	const [selectedDisplay, setSelectedDisplay] = useState<number | null>(null);
@@ -55,6 +56,7 @@ function App() {
 	const clearLive = useCallback(() => {
 		setLiveSlideId(null);
 		setLiveText(null);
+		setLiveTitle(undefined);
 	}, []);
 
 	const toggleOutput = useCallback(async () => {
@@ -127,9 +129,10 @@ function App() {
 		async (item: ServiceItem, slide: ServiceSlide) => {
 			if (!outputOpen) return;
 			const text = getSlideDisplayText(slide, item.displayLanguage, item.slideLanguageOverrides);
-			await window.electronAPI.outputSendSlide({ text, settings: slideSettings });
+			await window.electronAPI.outputSendSlide({ text, title: slide.reference, settings: slideSettings });
 			setLiveSlideId(slide.id);
 			setLiveText(text);
+			setLiveTitle(slide.reference);
 		},
 		[outputOpen, slideSettings],
 	);
@@ -251,6 +254,7 @@ function App() {
 				<PreviewPanel
 					outputOpen={outputOpen}
 					liveText={liveText ?? undefined}
+					liveTitle={liveTitle}
 					nextText={
 						selectedItem && selectedSlide
 							? getSlideDisplayText(
@@ -260,13 +264,18 @@ function App() {
 								)
 							: undefined
 					}
+					nextTitle={selectedSlide?.reference}
 					canProject={!!selectedSlide}
 					settings={slideSettings}
 					onProject={() => selectedItem && selectedSlide && sendToLive(selectedItem, selectedSlide)}
 					onGoBlack={goBlack}
 				/>
 			</div>
-			<SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+			<SettingsModal
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				onSongsImported={loadSongs}
+			/>
 			<SongForm
 				song={songFormTarget === "new" || songFormTarget === "new-ai" ? null : songFormTarget}
 				initialMode={songFormTarget === "new-ai" ? "ai" : "manual"}

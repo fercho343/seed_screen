@@ -27,9 +27,10 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 interface SettingsModalProps {
 	open: boolean;
 	onClose: () => void;
+	onSongsImported?: () => void;
 }
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, onSongsImported }: SettingsModalProps) {
 	const [section, setSection] = useState<SectionId>("theme");
 	const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
 	const [originalThemeId, setOriginalThemeId] = useState(DEFAULT_THEME_ID);
@@ -113,7 +114,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 								onChanged={refreshBackgrounds}
 							/>
 						)}
-						{section === "sync" && <SyncSection />}
+						{section === "sync" && <SyncSection onSongsImported={onSongsImported} />}
 					</div>
 				</div>
 
@@ -330,15 +331,29 @@ function BackgroundsSection({
 	);
 }
 
-function SyncSection() {
+interface ImportState {
+	loading?: boolean;
+	added?: number;
+	error?: string;
+}
+
+function SyncSection({ onSongsImported }: { onSongsImported?: () => void }) {
 	const [localInfo, setLocalInfo] = useState<LocalSyncInfo | null>(null);
 	const [peers, setPeers] = useState<SyncPeer[]>([]);
 	const [searching, setSearching] = useState(false);
 	const [searched, setSearched] = useState(false);
 	const [manualIp, setManualIp] = useState("");
+	const [status, setStatus] = useState<Record<string, ImportState>>({});
 
 	useEffect(() => {
 		window.electronAPI.syncGetLocalInfo().then(setLocalInfo);
+		window.electronAPI.syncGetPeers().then(setPeers);
+		window.electronAPI.onSyncPeerFound((peer) => {
+			setPeers((prev) => [...prev.filter((p) => p.ip !== peer.ip), peer]);
+		});
+		return () => {
+			window.ipcRenderer.removeAllListeners("sync-peer-found");
+		};
 	}, []);
 
 	const handleSearch = async () => {
@@ -347,6 +362,18 @@ function SyncSection() {
 		setPeers(found);
 		setSearching(false);
 		setSearched(true);
+	};
+
+	const importFrom = async (ip: string, port: number) => {
+		setStatus((s) => ({ ...s, [ip]: { loading: true } }));
+		try {
+			const songs = await window.electronAPI.syncFetchSongs(ip, port);
+			const result = await window.electronAPI.syncImportSongs(songs);
+			setStatus((s) => ({ ...s, [ip]: { added: result.added } }));
+			if (result.added > 0) onSongsImported?.();
+		} catch (e) {
+			setStatus((s) => ({ ...s, [ip]: { error: e instanceof Error ? e.message : "Failed" } }));
+		}
 	};
 
 	return (
@@ -405,27 +432,42 @@ function SyncSection() {
 				</div>
 			) : (
 				<div className="mb-5 flex flex-col gap-2">
-					{peers.map((peer) => (
-						<div
-							key={peer.ip}
-							className="flex items-center gap-3 rounded-lg border border-border bg-input p-3"
-						>
-							<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
-								<Laptop className="size-4" />
-							</div>
-							<div className="min-w-0 flex-1">
-								<div className="truncate text-[13px] font-semibold text-foreground">
-									{peer.hostname}
+					{peers.map((peer) => {
+						const st = status[peer.ip] ?? {};
+						return (
+							<div
+								key={peer.ip}
+								className="flex items-center gap-3 rounded-lg border border-border bg-input p-3"
+							>
+								<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary">
+									<Laptop className="size-4" />
 								</div>
-								<div className="font-mono text-[11px] text-text-3">
-									{peer.ip}:{peer.port} · {peer.songCount} songs
+								<div className="min-w-0 flex-1">
+									<div className="truncate text-[13px] font-semibold text-foreground">
+										{peer.hostname}
+									</div>
+									<div className="font-mono text-[11px] text-text-3">
+										{peer.ip}:{peer.port} · {peer.songCount} songs
+									</div>
+									{st.added !== undefined && (
+										<div className="text-[11px] text-emerald-400">
+											{st.added > 0 ? `${st.added} songs imported` : "Already up to date"}
+										</div>
+									)}
+									{st.error && <div className="text-[11px] text-red-400">{st.error}</div>}
 								</div>
+								<Button
+									size="sm"
+									variant="secondary"
+									disabled={st.loading}
+									onClick={() => importFrom(peer.ip, peer.port)}
+									className="text-xs"
+								>
+									{st.loading ? "…" : st.added !== undefined ? "Done" : "Import"}
+								</Button>
 							</div>
-							<Button size="sm" variant="secondary" className="text-xs">
-								Import
-							</Button>
-						</div>
-					))}
+						);
+					})}
 				</div>
 			)}
 
@@ -438,10 +480,25 @@ function SyncSection() {
 						placeholder="192.168.1.x"
 						className="h-8 border-border bg-card font-mono text-xs"
 					/>
-					<Button size="sm" disabled={!manualIp.trim()} className="shrink-0 text-xs">
-						Connect
+					<Button
+						size="sm"
+						disabled={!manualIp.trim() || status[manualIp.trim()]?.loading}
+						onClick={() => importFrom(manualIp.trim(), 3847)}
+						className="shrink-0 text-xs"
+					>
+						{status[manualIp.trim()]?.loading ? "…" : "Connect"}
 					</Button>
 				</div>
+				{manualIp.trim() && status[manualIp.trim()]?.added !== undefined && (
+					<div className="mt-1.5 text-[11px] text-emerald-400">
+						{status[manualIp.trim()].added! > 0
+							? `${status[manualIp.trim()].added} songs imported`
+							: "Already up to date"}
+					</div>
+				)}
+				{manualIp.trim() && status[manualIp.trim()]?.error && (
+					<div className="mt-1.5 text-[11px] text-red-400">{status[manualIp.trim()].error}</div>
+				)}
 			</div>
 		</div>
 	);

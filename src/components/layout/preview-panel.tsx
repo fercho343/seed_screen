@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 interface PreviewPanelProps {
 	outputOpen: boolean;
 	liveText?: string;
+	liveTitle?: string;
 	nextText?: string;
+	nextTitle?: string;
 	canProject: boolean;
 	settings: SlideSettings;
 	onProject: () => void;
@@ -16,7 +18,9 @@ interface PreviewPanelProps {
 export function PreviewPanel({
 	outputOpen,
 	liveText,
+	liveTitle,
 	nextText,
+	nextTitle,
 	canProject,
 	settings,
 	onProject,
@@ -36,12 +40,25 @@ export function PreviewPanel({
 					<span>Live</span>
 					{hasLive && <span className="text-emerald-400">Active</span>}
 				</div>
-				<PreviewCard label="Live" text={liveText} isEmpty={!hasLive} isLive={hasLive} settings={settings} />
+				<PreviewCard
+						label="Live"
+						text={liveText}
+						title={liveTitle}
+						isEmpty={!hasLive}
+						isLive={hasLive}
+						settings={settings}
+					/>
 			</div>
 
 			<div className="flex flex-col gap-1.5">
 				<span className="text-[10px] text-text-3">Next</span>
-				<PreviewCard label="Next" text={nextText} isEmpty={!hasNext} settings={settings} />
+				<PreviewCard
+						label="Next"
+						text={nextText}
+						title={nextTitle}
+						isEmpty={!hasNext}
+						settings={settings}
+					/>
 			</div>
 
 			<button

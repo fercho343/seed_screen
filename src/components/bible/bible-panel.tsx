@@ -107,12 +107,14 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 			sourceId: `bible-${selectedBook.id}-${selectedChapter}-${range}-${Date.now()}`,
 			type: "bible",
 			title: ref,
-			// One slide per verse so each can be projected on its own; the verse
-			// number stays in the text as a reference, the full ref is the label.
+			// One slide per verse so each can be projected on its own. The reference
+			// (e.g. "Génesis 3:4") shows as a small heading on the output; the text
+			// is the clean verse without the leading number.
 			slides: chosen.map((v) => ({
 				id: crypto.randomUUID(),
 				label: `${selectedBook.name} ${selectedChapter}:${v.v}`,
-				text: `${v.v} ${v.t}`,
+				reference: `${selectedBook.name} ${selectedChapter}:${v.v}`,
+				text: v.t,
 			})),
 		});
 		setSelectedVerses([]);

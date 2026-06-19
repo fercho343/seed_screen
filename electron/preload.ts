@@ -42,14 +42,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	bibleGetChapter: (bookId: string, chapterNum: number) =>
 		ipcRenderer.invoke("bible:get-chapter", bookId, chapterNum),
 	bibleSearch: (query: string) => ipcRenderer.invoke("bible:search", query),
-	outputToggle: () => ipcRenderer.invoke("output:toggle"),
+	outputToggle: (displayId?: number) => ipcRenderer.invoke("output:toggle", displayId),
 	outputGetStatus: () => ipcRenderer.invoke("output:get-status"),
-	outputSendText: (text: string) => ipcRenderer.invoke("output:send-text", text),
+	getDisplays: () => ipcRenderer.invoke("displays:get-all"),
+	onDisplaysChanged: (cb: () => void) => ipcRenderer.on("displays-changed", () => cb()),
+	outputSendSlide: (slide: { text: string; settings: unknown }) =>
+		ipcRenderer.invoke("output:send-slide", slide),
 	outputGoBlack: () => ipcRenderer.invoke("output:go-black"),
 	onOutputClosed: (cb: () => void) => ipcRenderer.on("output-window-closed", () => cb()),
 	onMenuToggleOutput: (cb: () => void) => ipcRenderer.on("menu-toggle-output", () => cb()),
-	onShowText: (cb: (text: string) => void) =>
-		ipcRenderer.on("show-text", (_event, text: string) => cb(text)),
+	onShowSlide: (cb: (slide: { text: string; settings: unknown }) => void) =>
+		ipcRenderer.on("show-slide", (_event, slide) => cb(slide)),
 	onGoBlack: (cb: () => void) => ipcRenderer.on("go-black", () => cb()),
 	songsGetAll: () => ipcRenderer.invoke("songs:get-all"),
 	songsAdd: (song: SongInput) => ipcRenderer.invoke("songs:add", song),

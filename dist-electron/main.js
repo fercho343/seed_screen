@@ -14,7 +14,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import electron, { app as app$1, ipcMain as ipcMain$1, BrowserWindow, Menu, screen } from "electron";
+import electron, { app as app$1, ipcMain as ipcMain$1, screen, BrowserWindow, Menu } from "electron";
 import process$1 from "node:process";
 import { promisify, isDeepStrictEqual } from "node:util";
 import assert from "node:assert";
@@ -20503,21 +20503,24 @@ function createWindow() {
   }
 }
 let outputWin = null;
-function getExternalDisplay() {
+function createOutputWindow(displayId) {
   const displays = screen.getAllDisplays();
   const primary = screen.getPrimaryDisplay();
-  return displays.find((d) => d.id !== primary.id) ?? null;
-}
-function createOutputWindow() {
-  const external = getExternalDisplay();
-  const bounds = (external == null ? void 0 : external.bounds) ?? { x: 80, y: 80, width: 960, height: 540 };
+  const target = (displayId ? displays.find((d) => d.id === displayId) : displays.find((d) => d.id !== primary.id)) ?? primary;
+  const isExternal = target.id !== primary.id;
+  const bounds = target.bounds;
   outputWin = new BrowserWindow({
     x: bounds.x,
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
-    fullscreen: !!external,
-    frame: !external,
+    // True OS fullscreen only makes sense on a genuine external display —
+    // fullscreening the primary display would hide the control window too.
+    // A frameless, always-on-top window sized to the full display still
+    // covers the whole screen either way.
+    fullscreen: isExternal,
+    frame: false,
+    alwaysOnTop: true,
     backgroundColor: "#000000",
     webPreferences: {
       preload: path.join(__dirname$1, "preload.mjs")
@@ -20666,17 +20669,26 @@ ipcMain$1.handle("sync:get-local-info", () => ({
 ipcMain$1.handle("sync:search-peers", async () => {
   return [];
 });
-ipcMain$1.handle("output:toggle", () => {
+ipcMain$1.handle("output:toggle", (_event, displayId) => {
   if (outputWin) {
     outputWin.close();
     return { opened: false };
   }
-  createOutputWindow();
+  createOutputWindow(displayId);
   return { opened: true };
 });
 ipcMain$1.handle("output:get-status", () => ({ isOpen: outputWin !== null }));
-ipcMain$1.handle("output:send-text", (_event, text2) => {
-  outputWin == null ? void 0 : outputWin.webContents.send("show-text", text2);
+ipcMain$1.handle("displays:get-all", () => {
+  const all = screen.getAllDisplays();
+  const primary = screen.getPrimaryDisplay();
+  return all.map((d) => ({
+    id: d.id,
+    label: d.id === primary.id ? "Primary Display" : "External Monitor",
+    isPrimary: d.id === primary.id
+  }));
+});
+ipcMain$1.handle("output:send-slide", (_event, slide) => {
+  outputWin == null ? void 0 : outputWin.webContents.send("show-slide", slide);
   return true;
 });
 ipcMain$1.handle("output:go-black", () => {
@@ -20733,6 +20745,8 @@ app$1.whenReady().then(() => {
   createWindow();
   const menu = Menu.buildFromTemplate(templateMenu);
   Menu.setApplicationMenu(menu);
+  screen.on("display-added", () => win == null ? void 0 : win.webContents.send("displays-changed"));
+  screen.on("display-removed", () => win == null ? void 0 : win.webContents.send("displays-changed"));
 });
 export {
   MAIN_DIST,

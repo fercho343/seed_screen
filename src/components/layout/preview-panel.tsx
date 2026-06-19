@@ -1,5 +1,6 @@
 import { PreviewCard } from "@/components/preview/preview-card";
 import { Button } from "@/components/ui/button";
+import type { SlideSettings } from "@/lib/slide-settings";
 import { cn } from "@/lib/utils";
 
 interface PreviewPanelProps {
@@ -7,6 +8,7 @@ interface PreviewPanelProps {
 	liveText?: string;
 	nextText?: string;
 	canProject: boolean;
+	settings: SlideSettings;
 	onProject: () => void;
 	onGoBlack: () => void;
 }
@@ -16,6 +18,7 @@ export function PreviewPanel({
 	liveText,
 	nextText,
 	canProject,
+	settings,
 	onProject,
 	onGoBlack,
 }: PreviewPanelProps) {
@@ -33,12 +36,12 @@ export function PreviewPanel({
 					<span>Live</span>
 					{hasLive && <span className="text-emerald-400">Active</span>}
 				</div>
-				<PreviewCard label="Live" text={liveText} isEmpty={!hasLive} isLive={hasLive} />
+				<PreviewCard label="Live" text={liveText} isEmpty={!hasLive} isLive={hasLive} settings={settings} />
 			</div>
 
 			<div className="flex flex-col gap-1.5">
 				<span className="text-[10px] text-text-3">Next</span>
-				<PreviewCard label="Next" text={nextText} isEmpty={!hasNext} />
+				<PreviewCard label="Next" text={nextText} isEmpty={!hasNext} settings={settings} />
 			</div>
 
 			<button
@@ -55,7 +58,7 @@ export function PreviewPanel({
 				{!outputOpen
 					? "Activate output first"
 					: !canProject
-						? "Select a Bible verse to project"
+						? "Select a slide to project"
 						: "Project"}
 			</button>
 
@@ -98,7 +101,7 @@ export function PreviewPanel({
 				</div>
 				<p className="mt-1 text-[10px] leading-relaxed text-text-4">
 					{outputOpen
-						? "Double-click a Bible verse in the service list to send it live."
+						? "Double-click a slide, or use ← → to navigate live."
 						: 'Press "Project" to activate output on the second monitor.'}
 				</p>
 			</div>

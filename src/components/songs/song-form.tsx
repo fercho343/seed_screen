@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Loader2, Search, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SongInput, SongRecord } from "../../../electron/electron-env";
 import { PreviewCard } from "@/components/preview/preview-card";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,17 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { LANG_NAMES } from "@/lib/languages";
+import { DEFAULT_SLIDE_SETTINGS, type SlideSettings } from "@/lib/slide-settings";
+import {
+	checkOllama,
+	detectLanguageWithAI,
+	generateSlidesWithAI,
+	searchLyricsWithAI,
+	SLIDE_LABELS,
+} from "@/lib/ollama";
 import { cn } from "@/lib/utils";
 
-const OLLAMA = "http://localhost:11434";
-const LABELS = ["V1", "V2", "V3", "V4", "V5", "CHORUS", "BRIDGE", "INTRO", "OUTRO"];
+type Mode = "manual" | "paste" | "ai";
 
 function splitLyricsIntoSlides(text: string) {
 	return text
@@ -29,26 +36,45 @@ function splitLyricsIntoSlides(text: string) {
 interface SongFormProps {
 	song: SongRecord | null;
 	open: boolean;
+	initialMode?: Mode;
+	slideSettings?: SlideSettings;
 	onClose: () => void;
 	onSaved: () => void;
 }
 
-export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
+export function SongForm({
+	song,
+	open,
+	initialMode = "manual",
+	slideSettings = DEFAULT_SLIDE_SETTINGS,
+	onClose,
+	onSaved,
+}: SongFormProps) {
 	const isEdit = !!song;
+	// The slide editor preview uses the live background but always flat — slide
+	// authoring shouldn't show the animated mesh, only a static tonal backdrop.
+	const previewSettings: SlideSettings = { ...slideSettings, animated: false };
 
 	const [title, setTitle] = useState("");
 	const [author, setAuthor] = useState("");
 	const [language, setLanguage] = useState("es");
-	const [mode, setMode] = useState<"manual" | "paste">("manual");
+	const [mode, setMode] = useState<Mode>("manual");
 	const [slides, setSlides] = useState<SongInput["slides"]>([
 		{ id: crypto.randomUUID(), label: "V1", text: "" },
 	]);
 	const [activeSlide, setActiveSlide] = useState(0);
 	const [pasteText, setPasteText] = useState("");
-	const [ollamaOk, setOllamaOk] = useState(false);
+	const [aiLyrics, setAiLyrics] = useState("");
+	const [ollamaOk, setOllamaOk] = useState<boolean | null>(null);
+	const [models, setModels] = useState<string[]>([]);
+	const [model, setModel] = useState("");
 	const [detecting, setDetecting] = useState(false);
+	const [searching, setSearching] = useState(false);
+	const [generating, setGenerating] = useState(false);
+	const [progress, setProgress] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+	const abortRef = useRef<AbortController | null>(null);
 
 	useEffect(() => {
 		if (!open) return;
@@ -56,46 +82,89 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 		setAuthor(song?.author ?? "");
 		setLanguage(song?.language ?? "es");
 		setSlides(
-			song?.slides?.length ? song.slides.map((s) => ({ ...s })) : [{ id: crypto.randomUUID(), label: "V1", text: "" }],
+			song?.slides?.length
+				? song.slides.map((s) => ({ ...s }))
+				: [{ id: crypto.randomUUID(), label: "V1", text: "" }],
 		);
 		setActiveSlide(0);
-		setMode("manual");
+		setMode(initialMode);
 		setPasteText("");
+		setAiLyrics("");
 		setError("");
-	}, [open, song]);
+	}, [open, song, initialMode]);
 
 	useEffect(() => {
-		fetch(`${OLLAMA}/api/tags`, { signal: AbortSignal.timeout(2000) })
-			.then(() => setOllamaOk(true))
-			.catch(() => setOllamaOk(false));
+		checkOllama().then(({ ok, models: ms }) => {
+			setOllamaOk(ok);
+			setModels(ms);
+			if (ms.length) setModel(ms[0]);
+		});
 	}, []);
 
 	const previewCount = useMemo(() => splitLyricsIntoSlides(pasteText).length, [pasteText]);
 
 	if (!open) return null;
 
-	const detectLanguage = async () => {
-		const sample = slides.map((s) => s.text).filter(Boolean).slice(0, 3).join("\n");
-		if (!sample.trim()) return;
+	const detectLanguage = async (text?: string) => {
+		const sample = text ?? slides.map((s) => s.text).filter(Boolean).slice(0, 3).join("\n");
+		if (!sample.trim() || !model) return;
 		setDetecting(true);
-		try {
-			const res = await fetch(`${OLLAMA}/api/generate`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					model: "llama3.2",
-					prompt: `Detect the language of the following song lyrics. Return ONLY a two-letter ISO 639-1 language code (es, en, fr, pt, de, it, zh, ko, ja). Return only the code, nothing else:\n\n${sample}`,
-					stream: false,
-					options: { temperature: 0, num_predict: 4 },
-				}),
-			});
-			const data = await res.json();
-			const code = (data.response || "").trim().toLowerCase().slice(0, 2);
-			if (LANG_NAMES[code]) setLanguage(code);
-		} catch {
-			// Ollama not reachable or model missing — leave language unchanged.
-		}
+		const code = await detectLanguageWithAI(model, sample);
+		if (code && LANG_NAMES[code]) setLanguage(code);
 		setDetecting(false);
+	};
+
+	const searchLyrics = async () => {
+		if (!title.trim()) {
+			setError("Write the title first");
+			return;
+		}
+		if (!model) {
+			setError("Select a model");
+			return;
+		}
+		setError("");
+		setSearching(true);
+		try {
+			const full = await searchLyricsWithAI(model, title, author, setAiLyrics);
+			if (full) {
+				setAiLyrics(full);
+				detectLanguage(full);
+			} else {
+				setError("The AI couldn't find the lyrics. Try another model or write them manually.");
+			}
+		} catch (e) {
+			setError(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
+		}
+		setSearching(false);
+	};
+
+	const generateWithAI = async () => {
+		if (!aiLyrics.trim()) {
+			setError("Paste or search the lyrics before generating");
+			return;
+		}
+		if (!model) {
+			setError("Select a model");
+			return;
+		}
+		setError("");
+		setGenerating(true);
+		const controller = new AbortController();
+		abortRef.current = controller;
+		try {
+			const generated = await generateSlidesWithAI(model, aiLyrics, controller.signal, setProgress);
+			if (!generated.length) throw new Error("The AI couldn't generate slides. Try another model.");
+			setSlides(generated);
+			setActiveSlide(0);
+			setMode("manual");
+		} catch (e) {
+			if (e instanceof Error && e.name === "AbortError") return;
+			setError(e instanceof Error ? e.message : String(e));
+		} finally {
+			setGenerating(false);
+			setProgress("");
+		}
 	};
 
 	const updateSlide = (idx: number, field: "label" | "text", value: string) => {
@@ -155,19 +224,24 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 		}
 	};
 
+	const handleClose = () => {
+		abortRef.current?.abort();
+		onClose();
+	};
+
 	return (
 		<div
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-			onClick={(e) => e.target === e.currentTarget && onClose()}
+			onClick={(e) => e.target === e.currentTarget && handleClose()}
 		>
-			<div className="flex h-[640px] w-[860px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+			<div className="flex h-[660px] w-[880px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
 				<div className="flex items-center justify-between border-b border-border px-5 py-3.5">
 					<span className="text-sm font-semibold text-foreground">
 						{isEdit ? "Edit song" : "New song"}
 					</span>
 					<button
 						type="button"
-						onClick={onClose}
+						onClick={handleClose}
 						className="flex size-6 items-center justify-center rounded-md text-text-3 hover:bg-hover hover:text-foreground"
 					>
 						<X className="size-4" />
@@ -222,7 +296,7 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 										size="icon-sm"
 										disabled={detecting}
 										title="Detect language with AI"
-										onClick={detectLanguage}
+										onClick={() => detectLanguage()}
 										className="shrink-0 bg-input text-primary"
 									>
 										<Sparkles className="size-3.5" />
@@ -232,20 +306,26 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 						</div>
 
 						<div className="border-t border-border pt-3">
-							<div className="mb-2 flex gap-1.5">
-								{(["manual", "paste"] as const).map((m) => (
+							<div className="mb-2 flex flex-col gap-1">
+								{(
+									[
+										["manual", "Build slides"],
+										["paste", "Paste lyrics"],
+										["ai", "Generate with AI"],
+									] as const
+								).map(([m, label]) => (
 									<button
 										key={m}
 										type="button"
 										onClick={() => setMode(m)}
 										className={cn(
-											"flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+											"rounded-md px-2 py-1.5 text-left text-[11px] font-medium transition-colors",
 											mode === m
 												? "bg-primary text-primary-foreground"
 												: "bg-input text-text-3 hover:text-foreground",
 										)}
 									>
-										{m === "manual" ? "Build slides" : "Paste lyrics"}
+										{label}
 									</button>
 								))}
 							</div>
@@ -325,6 +405,36 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 								</div>
 							</div>
 						)}
+
+						{mode === "ai" && (
+							<div className="flex flex-col gap-2">
+								<span className="text-[11px] font-semibold tracking-wide text-text-3 uppercase">
+									Ollama model
+								</span>
+								{ollamaOk === false ? (
+									<div className="rounded-lg border border-red-900 bg-red-950/40 px-2.5 py-2 text-[11px] text-red-300">
+										⚠ Could not connect to Ollama on localhost:11434.
+									</div>
+								) : models.length === 0 ? (
+									<div className="rounded-lg border border-border bg-input px-2.5 py-2 text-[11px] text-text-3">
+										Loading models...
+									</div>
+								) : (
+									<Select value={model} onValueChange={(v) => v && setModel(v)}>
+										<SelectTrigger className="h-8 w-full border-border bg-input text-xs">
+											<SelectValue>{(v: string) => v}</SelectValue>
+										</SelectTrigger>
+										<SelectContent>
+											{models.map((m) => (
+												<SelectItem key={m} value={m}>
+													{m}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								)}
+							</div>
+						)}
 					</div>
 
 					<div className="flex flex-1 flex-col gap-3 overflow-hidden p-5">
@@ -339,7 +449,7 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 											<SelectValue>{(v: string) => v}</SelectValue>
 										</SelectTrigger>
 										<SelectContent>
-											{LABELS.map((l) => (
+											{SLIDE_LABELS.map((l) => (
 												<SelectItem key={l} value={l}>
 													{l}
 												</SelectItem>
@@ -362,6 +472,7 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 									label={slides[activeSlide].label}
 									text={slides[activeSlide].text}
 									isEmpty={!slides[activeSlide].text}
+									settings={previewSettings}
 								/>
 							</>
 						)}
@@ -391,13 +502,95 @@ export function SongForm({ song, open, onClose, onSaved }: SongFormProps) {
 								</div>
 							</>
 						)}
+
+						{mode === "ai" && (
+							<>
+								{ollamaOk && (
+									<div className="flex items-center gap-3 rounded-lg border border-primary bg-primary/10 px-3.5 py-2.5">
+										<span className="flex-1 text-xs text-foreground">
+											{searching
+												? "Searching for lyrics..."
+												: title.trim()
+													? `Search lyrics for "${title.trim()}"${author.trim() ? ` — ${author.trim()}` : ""} with AI`
+													: "Write the title to search the lyrics automatically"}
+										</span>
+										<Button
+											size="sm"
+											disabled={searching || !title.trim() || !model}
+											onClick={searchLyrics}
+											className="gap-1.5 bg-gradient-to-br from-accent-2 to-primary"
+										>
+											{searching ? (
+												<Loader2 className="size-3.5 animate-spin" />
+											) : (
+												<Search className="size-3.5" />
+											)}
+											{searching ? "Searching..." : "Search lyrics with AI"}
+										</Button>
+									</div>
+								)}
+
+								<div className="flex items-center justify-between">
+									<span className="text-[11px] font-semibold tracking-wide text-text-3 uppercase">
+										Full lyrics
+										{searching && (
+											<span className="ml-2 font-normal text-primary normal-case">writing...</span>
+										)}
+									</span>
+									<span className="text-[11px] text-text-4">{aiLyrics.length} characters</span>
+								</div>
+								<Textarea
+									value={aiLyrics}
+									onChange={(e) => setAiLyrics(e.target.value)}
+									onBlur={(e) => {
+										if (!searching && e.target.value.trim().length > 30) detectLanguage(e.target.value);
+									}}
+									placeholder={
+										'Paste the full lyrics here, or use "Search lyrics with AI" above...\n\nExample:\nVerse 1\nA thousand generations...\n\nChorus\nHoly, holy, holy...'
+									}
+									className={cn(
+										"flex-1 resize-none border-border bg-input font-mono text-xs leading-relaxed",
+										searching && "opacity-70",
+									)}
+								/>
+
+								{generating ? (
+									<div className="flex items-center gap-2.5 rounded-lg border border-primary bg-primary/10 px-3.5 py-2.5">
+										<Loader2 className="size-4 animate-spin text-primary" />
+										<span className="text-xs text-primary">{progress}</span>
+										<button
+											type="button"
+											onClick={() => abortRef.current?.abort()}
+											className="ml-auto rounded-md border border-border px-2.5 py-1 text-[11px] text-text-3 hover:text-foreground"
+										>
+											Cancel
+										</button>
+									</div>
+								) : (
+									<div className="flex items-center justify-between rounded-lg border border-border bg-input p-3">
+										<span className="text-xs text-text-3">
+											AI splits the lyrics into labeled slides automatically
+										</span>
+										<Button
+											size="sm"
+											disabled={!aiLyrics.trim() || !ollamaOk || !model}
+											onClick={generateWithAI}
+											className="gap-1.5 bg-gradient-to-br from-accent-2 to-primary"
+										>
+											<Sparkles className="size-3.5" />
+											Generate slides
+										</Button>
+									</div>
+								)}
+							</>
+						)}
 					</div>
 				</div>
 
 				<div className="flex items-center justify-between border-t border-border px-5 py-3">
 					<span className="text-xs text-red-400">{error}</span>
 					<div className="flex gap-2">
-						<Button variant="outline" size="sm" className="bg-card" onClick={onClose}>
+						<Button variant="outline" size="sm" className="bg-card" onClick={handleClose}>
 							Cancel
 						</Button>
 						<Button size="sm" disabled={saving} onClick={handleSave}>

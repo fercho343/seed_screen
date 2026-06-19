@@ -20,7 +20,20 @@ interface LeftSidebarProps {
 	onAddToService: (item: Omit<ServiceItem, "scheduleId">) => void;
 	onNewSong: () => void;
 	onEditSong: (song: SongRecord) => void;
+	onTranslateSong: (song: SongRecord) => void;
+	onDeleteSong: (song: SongRecord) => void;
 	onOpenAIImport: () => void;
+}
+
+// Language codes that have at least one non-empty translation across the slides.
+function translatedLanguages(song: SongRecord): string[] {
+	const langs = new Set<string>();
+	for (const slide of song.slides) {
+		for (const [code, text] of Object.entries(slide.translations ?? {})) {
+			if (text?.trim()) langs.add(code.toUpperCase());
+		}
+	}
+	return [...langs];
 }
 
 export function LeftSidebar({
@@ -29,6 +42,8 @@ export function LeftSidebar({
 	onAddToService,
 	onNewSong,
 	onEditSong,
+	onTranslateSong,
+	onDeleteSong,
 	onOpenAIImport,
 }: LeftSidebarProps) {
 	const [search, setSearch] = useState("");
@@ -49,6 +64,7 @@ export function LeftSidebar({
 			type: "song",
 			title: song.title,
 			subtitle: song.author,
+			language: song.language,
 			slides: song.slides,
 		});
 	};
@@ -131,6 +147,7 @@ export function LeftSidebar({
 										id: String(song.id),
 										title: song.title,
 										author: song.author,
+										languages: translatedLanguages(song),
 										slides: song.slides,
 									}}
 									inService={isInService(song.id)}
@@ -140,6 +157,8 @@ export function LeftSidebar({
 									}
 									onAdd={() => addSong(song)}
 									onEdit={() => onEditSong(song)}
+									onTranslate={() => onTranslateSong(song)}
+									onDelete={() => onDeleteSong(song)}
 								/>
 							))
 						)}

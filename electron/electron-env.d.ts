@@ -45,6 +45,8 @@ export interface SlideRecord {
 	id: string;
 	label: string;
 	text: string;
+	/** Per-language translations of `text`, keyed by ISO 639-1 code. */
+	translations?: Record<string, string>;
 }
 
 export interface SongRecord {
@@ -64,6 +66,26 @@ export interface SongInput {
 	slides: SlideRecord[];
 }
 
+export interface DisplayInfo {
+	id: number;
+	label: string;
+	isPrimary: boolean;
+}
+
+export interface SlideSettingsPayload {
+	fontSize: number;
+	bold: boolean;
+	italic: boolean;
+	textAlign: "left" | "center";
+	animated: boolean;
+	background: { id: string; label: string; type: "color" | "gradient"; value: string };
+}
+
+export interface LiveSlidePayload {
+	text: string;
+	settings: SlideSettingsPayload;
+}
+
 export interface ElectronAPI {
 	settingsGetAll: () => Promise<{ theme: string; backgrounds: BackgroundItem[] }>;
 	settingsSetTheme: (theme: string) => Promise<boolean>;
@@ -79,13 +101,15 @@ export interface ElectronAPI {
 	bibleGetBooks: () => Promise<BibleBook[]>;
 	bibleGetChapter: (bookId: string, chapterNum: number) => Promise<BibleVerse[]>;
 	bibleSearch: (query: string) => Promise<BibleSearchResult[]>;
-	outputToggle: () => Promise<{ opened: boolean }>;
+	outputToggle: (displayId?: number) => Promise<{ opened: boolean }>;
 	outputGetStatus: () => Promise<{ isOpen: boolean }>;
-	outputSendText: (text: string) => Promise<boolean>;
+	outputSendSlide: (slide: LiveSlidePayload) => Promise<boolean>;
 	outputGoBlack: () => Promise<boolean>;
+	getDisplays: () => Promise<DisplayInfo[]>;
+	onDisplaysChanged: (cb: () => void) => void;
 	onOutputClosed: (cb: () => void) => void;
 	onMenuToggleOutput: (cb: () => void) => void;
-	onShowText: (cb: (text: string) => void) => void;
+	onShowSlide: (cb: (slide: LiveSlidePayload) => void) => void;
 	onGoBlack: (cb: () => void) => void;
 	songsGetAll: () => Promise<SongRecord[]>;
 	songsAdd: (song: SongInput) => Promise<SongRecord>;

@@ -1,17 +1,7 @@
-import {
-	AlignCenter,
-	AlignLeft,
-	Bold,
-	Italic,
-	Monitor,
-} from "lucide-react";
-import { useState } from "react";
+import { AlignCenter, AlignLeft, Bold, Italic, Monitor } from "lucide-react";
+import type { DisplayInfo } from "../../../electron/electron-env";
 import { Button } from "@/components/ui/button";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
 	Select,
 	SelectContent,
@@ -22,6 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { BACKGROUNDS, type SlideSettings } from "@/lib/slide-settings";
 import { cn } from "@/lib/utils";
 
 const STYLE_ITEMS = [
@@ -34,51 +25,22 @@ const ALIGN_ITEMS = [
 	{ value: "center", label: "Align center", icon: AlignCenter },
 ] as const;
 
-const BACKGROUNDS = [
-	{ id: "black", label: "Black", style: { background: "#000000" } },
-	{
-		id: "dark-purple",
-		label: "Dark Purple",
-		style: { background: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)" },
-	},
-	{
-		id: "night-blue",
-		label: "Night Blue",
-		style: { background: "linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)" },
-	},
-	{
-		id: "forest-green",
-		label: "Forest Green",
-		style: { background: "linear-gradient(135deg, #1b4332, #2d6a4f, #40916c)" },
-	},
-	{
-		id: "deep-red",
-		label: "Deep Red",
-		style: { background: "linear-gradient(135deg, #3d0000, #8b0000, #b22222)" },
-	},
-	{
-		id: "dark-gray",
-		label: "Dark Gray",
-		style: { background: "linear-gradient(160deg, #0a0a0a, #1a1a1a)" },
-	},
-] as const;
+interface BackgroundPickerProps {
+	selected: SlideSettings["background"];
+	onSelect: (bg: SlideSettings["background"]) => void;
+}
 
-const MONITORS = [
-	{ value: "external", label: "External Monitor" },
-	{ value: "built-in", label: "Built-in Display" },
-] as const;
-
-function BackgroundPicker() {
-	const [selected, setSelected] = useState<string>("night-blue");
-	const current =
-		BACKGROUNDS.find((c) => c.id === selected) ?? BACKGROUNDS[2];
-
+function BackgroundPicker({ selected, onSelect }: BackgroundPickerProps) {
 	return (
 		<Popover>
 			<PopoverTrigger className="flex items-center gap-1.5 rounded-md px-1.5 py-1.5 hover:bg-hover">
 				<span
 					className="size-4 shrink-0 rounded-sm border border-border"
-					style={current.style}
+					style={
+						selected.type === "color"
+							? { background: selected.value }
+							: { backgroundImage: selected.value }
+					}
 				/>
 				<span className="text-[11px] text-muted-foreground">Background</span>
 			</PopoverTrigger>
@@ -88,11 +50,11 @@ function BackgroundPicker() {
 						<button
 							key={bg.id}
 							type="button"
-							onClick={() => setSelected(bg.id)}
-							style={bg.style}
+							onClick={() => onSelect(bg)}
+							style={bg.type === "color" ? { background: bg.value } : { backgroundImage: bg.value }}
 							className={cn(
 								"flex h-13 w-22 items-center justify-center rounded-md text-center text-[10px] font-medium text-white/80 outline-2 outline-offset-2 outline-transparent transition-all [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]",
-								selected === bg.id && "outline-primary",
+								selected.id === bg.id && "outline-primary",
 							)}
 						>
 							{bg.label}
@@ -107,14 +69,26 @@ function BackgroundPicker() {
 interface TopBarProps {
 	outputOpen: boolean;
 	onToggleOutput: () => void;
+	displays: DisplayInfo[];
+	selectedDisplay: number | null;
+	onSelectDisplay: (id: number) => void;
+	slideSettings: SlideSettings;
+	onSlideSettingsChange: (updater: (s: SlideSettings) => SlideSettings) => void;
 }
 
-export function TopBar({ outputOpen, onToggleOutput }: TopBarProps) {
-	const [styles, setStyles] = useState<string[]>(["bold"]);
-	const [align, setAlign] = useState<string[]>(["center"]);
-	const [isAnimated, setIsAnimated] = useState(true);
-	const [monitor, setMonitor] = useState("external");
-	const [fontSize, setFontSize] = useState(56);
+export function TopBar({
+	outputOpen,
+	onToggleOutput,
+	displays,
+	selectedDisplay,
+	onSelectDisplay,
+	slideSettings,
+	onSlideSettingsChange,
+}: TopBarProps) {
+	const activeStyles = [
+		...(slideSettings.bold ? ["bold"] : []),
+		...(slideSettings.italic ? ["italic"] : []),
+	];
 
 	return (
 		<header className="flex h-[52px] shrink-0 items-center gap-2 bg-header px-4 text-header-foreground">
@@ -134,19 +108,23 @@ export function TopBar({ outputOpen, onToggleOutput }: TopBarProps) {
 						size="xs"
 						className="bg-card"
 						aria-label="Decrease text size"
-						onClick={() => setFontSize((s) => Math.max(20, s - 4))}
+						onClick={() =>
+							onSlideSettingsChange((s) => ({ ...s, fontSize: Math.max(20, s.fontSize - 4) }))
+						}
 					>
 						A-
 					</Button>
 					<span className="w-7 text-center text-xs text-muted-foreground">
-						{fontSize}
+						{slideSettings.fontSize}
 					</span>
 					<Button
 						variant="outline"
 						size="xs"
 						className="bg-card"
 						aria-label="Increase text size"
-						onClick={() => setFontSize((s) => Math.min(120, s + 4))}
+						onClick={() =>
+							onSlideSettingsChange((s) => ({ ...s, fontSize: Math.min(120, s.fontSize + 4) }))
+						}
 					>
 						A+
 					</Button>
@@ -159,8 +137,14 @@ export function TopBar({ outputOpen, onToggleOutput }: TopBarProps) {
 					size="sm"
 					spacing={0}
 					multiple
-					value={styles}
-					onValueChange={setStyles}
+					value={activeStyles}
+					onValueChange={(v) =>
+						onSlideSettingsChange((s) => ({
+							...s,
+							bold: v.includes("bold"),
+							italic: v.includes("italic"),
+						}))
+					}
 					className="bg-card"
 				>
 					{STYLE_ITEMS.map(({ value, label, icon: Icon }) => (
@@ -174,8 +158,10 @@ export function TopBar({ outputOpen, onToggleOutput }: TopBarProps) {
 					variant="outline"
 					size="sm"
 					spacing={0}
-					value={align}
-					onValueChange={setAlign}
+					value={[slideSettings.textAlign]}
+					onValueChange={(v) =>
+						v[0] && onSlideSettingsChange((s) => ({ ...s, textAlign: v[0] as "left" | "center" }))
+					}
 					className="bg-card"
 				>
 					{ALIGN_ITEMS.map(({ value, label, icon: Icon }) => (
@@ -187,42 +173,51 @@ export function TopBar({ outputOpen, onToggleOutput }: TopBarProps) {
 
 				<Separator orientation="vertical" className="h-7" />
 
-				<BackgroundPicker />
+				<BackgroundPicker
+					selected={slideSettings.background}
+					onSelect={(bg) => onSlideSettingsChange((s) => ({ ...s, background: bg }))}
+				/>
 
 				<div className="flex items-center gap-1.5 pl-1">
 					<Switch
 						size="sm"
-						checked={isAnimated}
-						onCheckedChange={setIsAnimated}
+						checked={slideSettings.animated}
+						onCheckedChange={(v) => onSlideSettingsChange((s) => ({ ...s, animated: v }))}
 					/>
 					<span
 						className={cn(
 							"text-[11px] whitespace-nowrap",
-							isAnimated ? "text-primary" : "text-text-3",
+							slideSettings.animated ? "text-primary" : "text-text-3",
 						)}
 					>
 						Animated
 					</span>
 				</div>
 
-				<Separator orientation="vertical" className="h-7" />
+				{displays.length > 1 && (
+					<>
+						<Separator orientation="vertical" className="h-7" />
+						<Select
+							value={selectedDisplay ? String(selectedDisplay) : undefined}
+							onValueChange={(v) => v && onSelectDisplay(Number(v))}
+						>
+							<SelectTrigger className="bg-card text-xs">
+								<SelectValue>
+									{(value: string) => displays.find((d) => String(d.id) === value)?.label}
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent>
+								{displays.map((d) => (
+									<SelectItem key={d.id} value={String(d.id)}>
+										{d.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</>
+				)}
 
-				<Select value={monitor} onValueChange={(v) => v && setMonitor(v)}>
-					<SelectTrigger className="bg-card text-xs">
-						<SelectValue>
-							{(value: string) =>
-								MONITORS.find((m) => m.value === value)?.label
-							}
-						</SelectValue>
-					</SelectTrigger>
-					<SelectContent>
-						{MONITORS.map((m) => (
-							<SelectItem key={m.value} value={m.value}>
-								{m.label}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
+				<Separator orientation="vertical" className="h-7" />
 
 				<Button
 					size="sm"

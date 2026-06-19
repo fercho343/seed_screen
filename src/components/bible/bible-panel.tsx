@@ -97,7 +97,9 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 
 	const addVerses = (nums: number[]) => {
 		if (!nums.length || !verses || !selectedBook || !selectedChapter) return;
-		const chosen = verses.filter((v) => nums.includes(v.v));
+		const chosen = verses
+			.filter((v) => nums.includes(v.v))
+			.sort((a, b) => a.v - b.v);
 		if (!chosen.length) return;
 		const range = verseRange(nums);
 		const ref = `${selectedBook.name} ${selectedChapter}:${range}`;
@@ -105,13 +107,13 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 			sourceId: `bible-${selectedBook.id}-${selectedChapter}-${range}-${Date.now()}`,
 			type: "bible",
 			title: ref,
-			slides: [
-				{
-					id: crypto.randomUUID(),
-					label: ref,
-					text: chosen.map((v) => `${v.v} ${v.t}`).join("\n"),
-				},
-			],
+			// One slide per verse so each can be projected on its own; the verse
+			// number stays in the text as a reference, the full ref is the label.
+			slides: chosen.map((v) => ({
+				id: crypto.randomUUID(),
+				label: `${selectedBook.name} ${selectedChapter}:${v.v}`,
+				text: `${v.v} ${v.t}`,
+			})),
 		});
 		setSelectedVerses([]);
 	};

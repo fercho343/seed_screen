@@ -127,23 +127,28 @@ function createWindow() {
 
 let outputWin: BrowserWindow | null = null;
 
-function getExternalDisplay() {
+function createOutputWindow(displayId?: number) {
 	const displays = screen.getAllDisplays();
 	const primary = screen.getPrimaryDisplay();
-	return displays.find((d) => d.id !== primary.id) ?? null;
-}
-
-function createOutputWindow() {
-	const external = getExternalDisplay();
-	const bounds = external?.bounds ?? { x: 80, y: 80, width: 960, height: 540 };
+	const target =
+		(displayId
+			? displays.find((d) => d.id === displayId)
+			: displays.find((d) => d.id !== primary.id)) ?? primary;
+	const isExternal = target.id !== primary.id;
+	const bounds = target.bounds;
 
 	outputWin = new BrowserWindow({
 		x: bounds.x,
 		y: bounds.y,
 		width: bounds.width,
 		height: bounds.height,
-		fullscreen: !!external,
-		frame: !external,
+		// True OS fullscreen only makes sense on a genuine external display —
+		// fullscreening the primary display would hide the control window too.
+		// A frameless, always-on-top window sized to the full display still
+		// covers the whole screen either way.
+		fullscreen: isExternal,
+		frame: false,
+		alwaysOnTop: true,
 		backgroundColor: "#000000",
 		webPreferences: {
 			preload: path.join(__dirname, "preload.mjs"),
@@ -312,19 +317,29 @@ ipcMain.handle("sync:search-peers", async () => {
 	return [];
 });
 
-ipcMain.handle("output:toggle", () => {
+ipcMain.handle("output:toggle", (_event, displayId?: number) => {
 	if (outputWin) {
 		outputWin.close();
 		return { opened: false };
 	}
-	createOutputWindow();
+	createOutputWindow(displayId);
 	return { opened: true };
 });
 
 ipcMain.handle("output:get-status", () => ({ isOpen: outputWin !== null }));
 
-ipcMain.handle("output:send-text", (_event, text: string) => {
-	outputWin?.webContents.send("show-text", text);
+ipcMain.handle("displays:get-all", () => {
+	const all = screen.getAllDisplays();
+	const primary = screen.getPrimaryDisplay();
+	return all.map((d) => ({
+		id: d.id,
+		label: d.id === primary.id ? "Primary Display" : "External Monitor",
+		isPrimary: d.id === primary.id,
+	}));
+});
+
+ipcMain.handle("output:send-slide", (_event, slide: { text: string; settings: unknown }) => {
+	outputWin?.webContents.send("show-slide", slide);
 	return true;
 });
 
@@ -405,4 +420,7 @@ app.whenReady().then(() => {
 
 	// Establecerlo como el menú principal de la app
 	Menu.setApplicationMenu(menu);
+
+	screen.on("display-added", () => win?.webContents.send("displays-changed"));
+	screen.on("display-removed", () => win?.webContents.send("displays-changed"));
 });

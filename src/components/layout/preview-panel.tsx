@@ -1,15 +1,24 @@
-import { useState } from "react";
 import { PreviewCard } from "@/components/preview/preview-card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export function PreviewPanel() {
-	const [outputOpen] = useState(true);
-	const [liveText] = useState<string | undefined>(undefined);
-	const [nextText] = useState<string | undefined>(
-		"Amazing grace, how sweet the sound\nThat saved a wretch like me",
-	);
+interface PreviewPanelProps {
+	outputOpen: boolean;
+	liveText?: string;
+	nextText?: string;
+	canProject: boolean;
+	onProject: () => void;
+	onGoBlack: () => void;
+}
 
+export function PreviewPanel({
+	outputOpen,
+	liveText,
+	nextText,
+	canProject,
+	onProject,
+	onGoBlack,
+}: PreviewPanelProps) {
 	const hasLive = Boolean(liveText);
 	const hasNext = Boolean(nextText);
 
@@ -34,18 +43,19 @@ export function PreviewPanel() {
 
 			<button
 				type="button"
-				disabled={!outputOpen || !hasNext}
+				disabled={!outputOpen || !canProject}
+				onClick={onProject}
 				className={cn(
 					"rounded-lg border px-3 py-2.5 text-xs font-bold tracking-wide transition-colors",
-					outputOpen && hasNext
+					outputOpen && canProject
 						? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
 						: "cursor-not-allowed border-border bg-card text-text-4",
 				)}
 			>
 				{!outputOpen
 					? "Activate output first"
-					: !hasNext
-						? "Select a slide first"
+					: !canProject
+						? "Select a Bible verse to project"
 						: "Project"}
 			</button>
 
@@ -54,6 +64,7 @@ export function PreviewPanel() {
 					variant="secondary"
 					size="sm"
 					disabled={!outputOpen}
+					onClick={onGoBlack}
 					className="flex-1 bg-background text-xs text-muted-foreground hover:bg-hover"
 				>
 					Black (B)
@@ -61,7 +72,7 @@ export function PreviewPanel() {
 				<Button
 					variant="outline"
 					size="sm"
-					disabled={!outputOpen}
+					disabled
 					className="flex-1 bg-card text-xs text-muted-foreground hover:bg-hover"
 				>
 					Logo (L)
@@ -87,7 +98,7 @@ export function PreviewPanel() {
 				</div>
 				<p className="mt-1 text-[10px] leading-relaxed text-text-4">
 					{outputOpen
-						? "Double-click a slide to send it live."
+						? "Double-click a Bible verse in the service list to send it live."
 						: 'Press "Project" to activate output on the second monitor.'}
 				</p>
 			</div>

@@ -20,6 +20,27 @@ export interface SyncPeer {
 	songCount: number;
 }
 
+export interface BibleBook {
+	id: string;
+	name: string;
+	abbr: string;
+	chapterCount: number;
+	index: number;
+}
+
+export interface BibleVerse {
+	v: number;
+	t: string;
+}
+
+export interface BibleSearchResult {
+	bookName: string;
+	abbr: string;
+	chapter: number;
+	verse: number;
+	text: string;
+}
+
 export interface ElectronAPI {
 	settingsGetAll: () => Promise<{ theme: string; backgrounds: BackgroundItem[] }>;
 	settingsSetTheme: (theme: string) => Promise<boolean>;
@@ -32,6 +53,17 @@ export interface ElectronAPI {
 	syncGetLocalInfo: () => Promise<LocalSyncInfo>;
 	syncSearchPeers: () => Promise<SyncPeer[]>;
 	onOpenSettings: (cb: () => void) => void;
+	bibleGetBooks: () => Promise<BibleBook[]>;
+	bibleGetChapter: (bookId: string, chapterNum: number) => Promise<BibleVerse[]>;
+	bibleSearch: (query: string) => Promise<BibleSearchResult[]>;
+	outputToggle: () => Promise<{ opened: boolean }>;
+	outputGetStatus: () => Promise<{ isOpen: boolean }>;
+	outputSendText: (text: string) => Promise<boolean>;
+	outputGoBlack: () => Promise<boolean>;
+	onOutputClosed: (cb: () => void) => void;
+	onMenuToggleOutput: (cb: () => void) => void;
+	onShowText: (cb: (text: string) => void) => void;
+	onGoBlack: (cb: () => void) => void;
 }
 
 declare global {

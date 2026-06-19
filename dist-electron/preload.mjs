@@ -33,5 +33,16 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   backgroundsDelete: (id) => electron.ipcRenderer.invoke("backgrounds:delete", id),
   syncGetLocalInfo: () => electron.ipcRenderer.invoke("sync:get-local-info"),
   syncSearchPeers: () => electron.ipcRenderer.invoke("sync:search-peers"),
-  onOpenSettings: (cb) => electron.ipcRenderer.on("open-settings", () => cb())
+  onOpenSettings: (cb) => electron.ipcRenderer.on("open-settings", () => cb()),
+  bibleGetBooks: () => electron.ipcRenderer.invoke("bible:get-books"),
+  bibleGetChapter: (bookId, chapterNum) => electron.ipcRenderer.invoke("bible:get-chapter", bookId, chapterNum),
+  bibleSearch: (query) => electron.ipcRenderer.invoke("bible:search", query),
+  outputToggle: () => electron.ipcRenderer.invoke("output:toggle"),
+  outputGetStatus: () => electron.ipcRenderer.invoke("output:get-status"),
+  outputSendText: (text) => electron.ipcRenderer.invoke("output:send-text", text),
+  outputGoBlack: () => electron.ipcRenderer.invoke("output:go-black"),
+  onOutputClosed: (cb) => electron.ipcRenderer.on("output-window-closed", () => cb()),
+  onMenuToggleOutput: (cb) => electron.ipcRenderer.on("menu-toggle-output", () => cb()),
+  onShowText: (cb) => electron.ipcRenderer.on("show-text", (_event, text) => cb(text)),
+  onGoBlack: (cb) => electron.ipcRenderer.on("go-black", () => cb())
 });

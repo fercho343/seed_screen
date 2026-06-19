@@ -1,9 +1,11 @@
 import { BookOpen, Image, Music, Plus, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { BiblePanel } from "@/components/bible/bible-panel";
 import { type SongItemData, SongItem } from "@/components/songs/song-item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { ServiceItem } from "@/lib/service-types";
 
 const TABS = [
 	{ id: "songs", label: "Songs", icon: Music },
@@ -46,10 +48,14 @@ const SONGS: SongItemData[] = [
 	},
 ];
 
-export function LeftSidebar() {
+interface LeftSidebarProps {
+	service: ServiceItem[];
+	onAddToService: (item: Omit<ServiceItem, "scheduleId">) => void;
+}
+
+export function LeftSidebar({ service, onAddToService }: LeftSidebarProps) {
 	const [search, setSearch] = useState("");
 	const [expandedId, setExpandedId] = useState<string | null>(null);
-	const [serviceIds, setServiceIds] = useState<Set<string>>(new Set());
 
 	const filtered = SONGS.filter(
 		(s) =>
@@ -57,11 +63,16 @@ export function LeftSidebar() {
 			s.author.toLowerCase().includes(search.toLowerCase()),
 	);
 
-	const toggleService = (id: string) => {
-		setServiceIds((prev) => {
-			const next = new Set(prev);
-			next.has(id) ? next.delete(id) : next.add(id);
-			return next;
+	const isInService = (songId: string) =>
+		service.some((item) => item.type === "song" && item.sourceId === songId);
+
+	const addSong = (song: SongItemData) => {
+		onAddToService({
+			sourceId: song.id,
+			type: "song",
+			title: song.title,
+			subtitle: song.author,
+			slides: song.slides,
 		});
 	};
 
@@ -136,12 +147,12 @@ export function LeftSidebar() {
 								<SongItem
 									key={song.id}
 									song={song}
-									inService={serviceIds.has(song.id)}
+									inService={isInService(song.id)}
 									expanded={expandedId === song.id}
 									onToggleExpand={() =>
 										setExpandedId((cur) => (cur === song.id ? null : song.id))
 									}
-									onAdd={() => toggleService(song.id)}
+									onAdd={() => addSong(song)}
 									onEdit={() => {}}
 								/>
 							))
@@ -149,13 +160,8 @@ export function LeftSidebar() {
 					</div>
 				</TabsContent>
 
-				<TabsContent
-					value="bible"
-					className="m-0 flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
-				>
-					<BookOpen className="size-7 text-text-4" />
-					<p className="text-xs font-medium text-text-3">Bible search</p>
-					<p className="text-[11px] text-text-4">Coming soon</p>
+				<TabsContent value="bible" className="m-0 flex flex-1 flex-col overflow-hidden">
+					<BiblePanel onAddToService={onAddToService} />
 				</TabsContent>
 
 				<TabsContent

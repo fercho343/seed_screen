@@ -37,4 +37,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	syncGetLocalInfo: () => ipcRenderer.invoke("sync:get-local-info"),
 	syncSearchPeers: () => ipcRenderer.invoke("sync:search-peers"),
 	onOpenSettings: (cb: () => void) => ipcRenderer.on("open-settings", () => cb()),
+	bibleGetBooks: () => ipcRenderer.invoke("bible:get-books"),
+	bibleGetChapter: (bookId: string, chapterNum: number) =>
+		ipcRenderer.invoke("bible:get-chapter", bookId, chapterNum),
+	bibleSearch: (query: string) => ipcRenderer.invoke("bible:search", query),
+	outputToggle: () => ipcRenderer.invoke("output:toggle"),
+	outputGetStatus: () => ipcRenderer.invoke("output:get-status"),
+	outputSendText: (text: string) => ipcRenderer.invoke("output:send-text", text),
+	outputGoBlack: () => ipcRenderer.invoke("output:go-black"),
+	onOutputClosed: (cb: () => void) => ipcRenderer.on("output-window-closed", () => cb()),
+	onMenuToggleOutput: (cb: () => void) => ipcRenderer.on("menu-toggle-output", () => cb()),
+	onShowText: (cb: (text: string) => void) =>
+		ipcRenderer.on("show-text", (_event, text: string) => cb(text)),
+	onGoBlack: (cb: () => void) => ipcRenderer.on("go-black", () => cb()),
 });

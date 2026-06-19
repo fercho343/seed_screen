@@ -104,13 +104,17 @@ function BackgroundPicker() {
 	);
 }
 
-export function TopBar() {
+interface TopBarProps {
+	outputOpen: boolean;
+	onToggleOutput: () => void;
+}
+
+export function TopBar({ outputOpen, onToggleOutput }: TopBarProps) {
 	const [styles, setStyles] = useState<string[]>(["bold"]);
 	const [align, setAlign] = useState<string[]>(["center"]);
 	const [isAnimated, setIsAnimated] = useState(true);
 	const [monitor, setMonitor] = useState("external");
 	const [fontSize, setFontSize] = useState(56);
-	const [isLive, setIsLive] = useState(false);
 
 	return (
 		<header className="flex h-[52px] shrink-0 items-center gap-2 bg-header px-4 text-header-foreground">
@@ -222,17 +226,17 @@ export function TopBar() {
 
 				<Button
 					size="sm"
-					onClick={() => setIsLive((v) => !v)}
+					onClick={onToggleOutput}
 					className={cn(
 						"gap-1.5 font-bold tracking-wide",
-						isLive
+						outputOpen
 							? "bg-emerald-600 text-white hover:bg-emerald-600/90"
 							: "bg-primary text-primary-foreground hover:bg-primary/90",
 					)}
 				>
 					<Monitor className="size-3.5" />
-					{isLive ? "LIVE" : "PROJECT"}
-					{isLive && (
+					{outputOpen ? "LIVE" : "PROJECT"}
+					{outputOpen && (
 						<span className="size-2 animate-[pulse-live_1.5s_infinite] rounded-full bg-emerald-300" />
 					)}
 				</Button>

@@ -18,6 +18,17 @@ export default defineConfig({
 			main: {
 				// Shortcut of `build.lib.entry`.
 				entry: "electron/main.ts",
+				vite: {
+					build: {
+						rollupOptions: {
+							// better-sqlite3 (via the `bindings` package) locates its native
+							// .node file using CJS-only globals (__filename/module). Bundling
+							// it into the ESM main process output breaks that lookup, so it
+							// must stay external and be loaded via Node's native require.
+							external: ["better-sqlite3"],
+						},
+					},
+				},
 			},
 			preload: {
 				// Shortcut of `build.rollupOptions.input`.

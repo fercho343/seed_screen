@@ -12,6 +12,7 @@ import {
 	type MenuItemConstructorOptions,
 } from "electron";
 import Store from "electron-store";
+import { addSong, deleteSong, getSongs, type SongInput, updateSong } from "./db";
 import type { BackgroundItem } from "./electron-env";
 
 interface StoreSchema {
@@ -195,6 +196,18 @@ const templateMenu: MenuItemConstructorOptions[] = [
 		: []),
 
 	{
+		label: "Edit",
+		submenu: [
+			{ label: "Undo", role: "undo" as const },
+			{ label: "Redo", role: "redo" as const },
+			{ type: "separator" as const },
+			{ label: "Cut", role: "cut" as const },
+			{ label: "Copy", role: "copy" as const },
+			{ label: "Paste", role: "paste" as const },
+			{ label: "Select All", role: "selectAll" as const },
+		],
+	},
+	{
 		label: "Services",
 		submenu: [
 			{
@@ -221,10 +234,12 @@ const templateMenu: MenuItemConstructorOptions[] = [
 			{
 				label: "New Song",
 				accelerator: "CmdOrCtrl+N",
+				click: () => win?.webContents.send("menu-new-song"),
 			},
 			{
 				label: "New song with AI",
 				accelerator: "CmdOrCtrl+Shift+I",
+				click: () => win?.webContents.send("menu-new-song-ai"),
 			},
 		],
 	},
@@ -317,6 +332,14 @@ ipcMain.handle("output:go-black", () => {
 	outputWin?.webContents.send("go-black");
 	return true;
 });
+
+ipcMain.handle("songs:get-all", () => getSongs());
+
+ipcMain.handle("songs:add", (_event, input: SongInput) => addSong(input));
+
+ipcMain.handle("songs:update", (_event, id: number, input: SongInput) => updateSong(id, input));
+
+ipcMain.handle("songs:delete", (_event, id: number) => deleteSong(id));
 
 ipcMain.handle("bible:get-books", () => {
 	return getBible().books.map((b, i) => ({

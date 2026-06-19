@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { SongInput } from "./db";
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -50,4 +51,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	onShowText: (cb: (text: string) => void) =>
 		ipcRenderer.on("show-text", (_event, text: string) => cb(text)),
 	onGoBlack: (cb: () => void) => ipcRenderer.on("go-black", () => cb()),
+	songsGetAll: () => ipcRenderer.invoke("songs:get-all"),
+	songsAdd: (song: SongInput) => ipcRenderer.invoke("songs:add", song),
+	songsUpdate: (id: number, song: SongInput) => ipcRenderer.invoke("songs:update", id, song),
+	songsDelete: (id: number) => ipcRenderer.invoke("songs:delete", id),
+	onMenuNewSong: (cb: () => void) => ipcRenderer.on("menu-new-song", () => cb()),
+	onMenuNewSongAI: (cb: () => void) => ipcRenderer.on("menu-new-song-ai", () => cb()),
 });

@@ -1,7 +1,8 @@
 import { BookOpen, Image, Music, Plus, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
+import type { SongRecord } from "../../../electron/electron-env";
 import { BiblePanel } from "@/components/bible/bible-panel";
-import { type SongItemData, SongItem } from "@/components/songs/song-item";
+import { SongItem } from "@/components/songs/song-item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,62 +14,38 @@ const TABS = [
 	{ id: "media", label: "Media", icon: Image },
 ] as const;
 
-const SONGS: SongItemData[] = [
-	{
-		id: "1",
-		title: "Holy Forever",
-		author: "Chris Tomlin",
-		languages: ["ES"],
-		slides: [
-			{ id: "1-1", label: "V1", text: "Hear the saints throb a hymn\nFrom the throne of God" },
-			{ id: "1-2", label: "C", text: "And on that day\nWhen the stars will fall" },
-			{ id: "1-3", label: "C", text: "We will sing holy forever\nHoly forever" },
-			{ id: "1-4", label: "B", text: "Even when my time on earth is done\nThe song goes on" },
-		],
-	},
-	{
-		id: "2",
-		title: "Amazing Grace",
-		author: "John Newton",
-		slides: [
-			{ id: "2-1", label: "V1", text: "Amazing grace, how sweet the sound\nThat saved a wretch like me" },
-			{ id: "2-2", label: "V2", text: "I once was lost, but now am found\nWas blind but now I see" },
-		],
-	},
-	{
-		id: "3",
-		title: "How Great Thou Art",
-		author: "Stuart K. Hine",
-		languages: ["ES", "FR"],
-		slides: [
-			{ id: "3-1", label: "V1", text: "O Lord my God, when I in awesome wonder" },
-			{ id: "3-2", label: "C", text: "Then sings my soul, my Savior God, to Thee" },
-			{ id: "3-3", label: "C", text: "How great Thou art, how great Thou art" },
-		],
-	},
-];
-
 interface LeftSidebarProps {
+	songs: SongRecord[];
 	service: ServiceItem[];
 	onAddToService: (item: Omit<ServiceItem, "scheduleId">) => void;
+	onNewSong: () => void;
+	onEditSong: (song: SongRecord) => void;
+	onOpenAIImport: () => void;
 }
 
-export function LeftSidebar({ service, onAddToService }: LeftSidebarProps) {
+export function LeftSidebar({
+	songs,
+	service,
+	onAddToService,
+	onNewSong,
+	onEditSong,
+	onOpenAIImport,
+}: LeftSidebarProps) {
 	const [search, setSearch] = useState("");
-	const [expandedId, setExpandedId] = useState<string | null>(null);
+	const [expandedId, setExpandedId] = useState<number | null>(null);
 
-	const filtered = SONGS.filter(
+	const filtered = songs.filter(
 		(s) =>
 			s.title.toLowerCase().includes(search.toLowerCase()) ||
 			s.author.toLowerCase().includes(search.toLowerCase()),
 	);
 
-	const isInService = (songId: string) =>
-		service.some((item) => item.type === "song" && item.sourceId === songId);
+	const isInService = (songId: number) =>
+		service.some((item) => item.type === "song" && item.sourceId === String(songId));
 
-	const addSong = (song: SongItemData) => {
+	const addSong = (song: SongRecord) => {
 		onAddToService({
-			sourceId: song.id,
+			sourceId: String(song.id),
 			type: "song",
 			title: song.title,
 			subtitle: song.author,
@@ -113,6 +90,7 @@ export function LeftSidebar({ service, onAddToService }: LeftSidebarProps) {
 						<Button
 							size="icon-sm"
 							title="Import with AI"
+							onClick={onOpenAIImport}
 							className="shrink-0 bg-gradient-to-br from-accent-2 to-primary"
 						>
 							<Sparkles className="size-3.5" />
@@ -121,6 +99,7 @@ export function LeftSidebar({ service, onAddToService }: LeftSidebarProps) {
 							size="icon-sm"
 							variant="outline"
 							title="New song"
+							onClick={onNewSong}
 							className="shrink-0 bg-card"
 						>
 							<Plus className="size-3.5" />
@@ -137,23 +116,30 @@ export function LeftSidebar({ service, onAddToService }: LeftSidebarProps) {
 						{filtered.length === 0 ? (
 							<div className="flex flex-1 flex-col items-center justify-center gap-1 px-4 py-8 text-center">
 								<Music className="size-7 text-text-4" />
-								<p className="text-xs font-medium text-text-3">No songs found</p>
+								<p className="text-xs font-medium text-text-3">
+									{songs.length === 0 ? "No songs yet" : "No songs found"}
+								</p>
 								<p className="text-[11px] text-text-4">
-									Try a different search term
+									{songs.length === 0 ? "Add one with the + button above" : "Try a different search term"}
 								</p>
 							</div>
 						) : (
 							filtered.map((song) => (
 								<SongItem
 									key={song.id}
-									song={song}
+									song={{
+										id: String(song.id),
+										title: song.title,
+										author: song.author,
+										slides: song.slides,
+									}}
 									inService={isInService(song.id)}
 									expanded={expandedId === song.id}
 									onToggleExpand={() =>
 										setExpandedId((cur) => (cur === song.id ? null : song.id))
 									}
 									onAdd={() => addSong(song)}
-									onEdit={() => {}}
+									onEdit={() => onEditSong(song)}
 								/>
 							))
 						)}

@@ -41,6 +41,29 @@ export interface BibleSearchResult {
 	text: string;
 }
 
+export interface SlideRecord {
+	id: string;
+	label: string;
+	text: string;
+}
+
+export interface SongRecord {
+	id: number;
+	title: string;
+	author: string;
+	language: string;
+	slides: SlideRecord[];
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface SongInput {
+	title: string;
+	author: string;
+	language: string;
+	slides: SlideRecord[];
+}
+
 export interface ElectronAPI {
 	settingsGetAll: () => Promise<{ theme: string; backgrounds: BackgroundItem[] }>;
 	settingsSetTheme: (theme: string) => Promise<boolean>;
@@ -64,6 +87,12 @@ export interface ElectronAPI {
 	onMenuToggleOutput: (cb: () => void) => void;
 	onShowText: (cb: (text: string) => void) => void;
 	onGoBlack: (cb: () => void) => void;
+	songsGetAll: () => Promise<SongRecord[]>;
+	songsAdd: (song: SongInput) => Promise<SongRecord>;
+	songsUpdate: (id: number, song: SongInput) => Promise<SongRecord | null>;
+	songsDelete: (id: number) => Promise<boolean>;
+	onMenuNewSong: (cb: () => void) => void;
+	onMenuNewSongAI: (cb: () => void) => void;
 }
 
 declare global {

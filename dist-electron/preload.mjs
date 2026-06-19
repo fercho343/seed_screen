@@ -44,5 +44,11 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   onOutputClosed: (cb) => electron.ipcRenderer.on("output-window-closed", () => cb()),
   onMenuToggleOutput: (cb) => electron.ipcRenderer.on("menu-toggle-output", () => cb()),
   onShowText: (cb) => electron.ipcRenderer.on("show-text", (_event, text) => cb(text)),
-  onGoBlack: (cb) => electron.ipcRenderer.on("go-black", () => cb())
+  onGoBlack: (cb) => electron.ipcRenderer.on("go-black", () => cb()),
+  songsGetAll: () => electron.ipcRenderer.invoke("songs:get-all"),
+  songsAdd: (song) => electron.ipcRenderer.invoke("songs:add", song),
+  songsUpdate: (id, song) => electron.ipcRenderer.invoke("songs:update", id, song),
+  songsDelete: (id) => electron.ipcRenderer.invoke("songs:delete", id),
+  onMenuNewSong: (cb) => electron.ipcRenderer.on("menu-new-song", () => cb()),
+  onMenuNewSongAI: (cb) => electron.ipcRenderer.on("menu-new-song-ai", () => cb())
 });

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import {
 	app,
 	BrowserWindow,
+	dialog,
 	ipcMain,
 	Menu,
 	screen,
@@ -12,7 +13,7 @@ import {
 } from "electron";
 import Store from "electron-store";
 import { addSong, deleteSong, getSongs, importSongs, type SongInput, updateSong } from "./db";
-import type { BackgroundItem } from "./electron-env";
+import type { BackgroundItem, ImageAsset } from "./electron-env";
 import * as remote from "./remote";
 import type { RemoteState } from "./remote";
 import * as sync from "./sync";
@@ -20,11 +21,39 @@ import * as sync from "./sync";
 interface StoreSchema {
 	theme: string;
 	backgrounds: BackgroundItem[];
+	logo: string | null;
+	images: ImageAsset[];
 }
 
 const store = new Store<StoreSchema>({
-	defaults: { theme: "marino", backgrounds: [] },
+	defaults: { theme: "marino", backgrounds: [], logo: null, images: [] },
 });
+
+const IMAGE_MIME: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+	".svg": "image/svg+xml",
+};
+
+/** Opens a native file picker for images and returns it as a base64 data URL, or null if cancelled. */
+function pickImageAsDataUrl(): { name: string; dataUrl: string } | null {
+	const result = dialog.showOpenDialogSync({
+		properties: ["openFile"],
+		filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] }],
+	});
+	const filePath = result?.[0];
+	if (!filePath) return null;
+	const ext = path.extname(filePath).toLowerCase();
+	const mime = IMAGE_MIME[ext] ?? "application/octet-stream";
+	const base64 = fs.readFileSync(filePath).toString("base64");
+	return {
+		name: path.basename(filePath, ext),
+		dataUrl: `data:${mime};base64,${base64}`,
+	};
+}
 
 interface BibleVerseItem {
 	type: string;
@@ -262,10 +291,12 @@ const templateMenu: MenuItemConstructorOptions[] = [
 			{
 				label: "Show black screen",
 				accelerator: "B",
+				click: () => win?.webContents.send("menu-go-black"),
 			},
 			{
 				label: "Show logo",
 				accelerator: "L",
+				click: () => win?.webContents.send("menu-show-logo"),
 			},
 			{ type: "separator" as const },
 			{
@@ -297,10 +328,24 @@ const templateMenu: MenuItemConstructorOptions[] = [
 ipcMain.handle("settings:get-all", () => ({
 	theme: store.get("theme"),
 	backgrounds: store.get("backgrounds"),
+	logo: store.get("logo"),
+	images: store.get("images"),
 }));
 
 ipcMain.handle("settings:set-theme", (_event, theme: string) => {
 	store.set("theme", theme);
+	return true;
+});
+
+ipcMain.handle("settings:pick-logo", () => {
+	const picked = pickImageAsDataUrl();
+	if (!picked) return null;
+	store.set("logo", picked.dataUrl);
+	return picked.dataUrl;
+});
+
+ipcMain.handle("settings:clear-logo", () => {
+	store.set("logo", null);
 	return true;
 });
 
@@ -319,6 +364,23 @@ ipcMain.handle("backgrounds:delete", (_event, id: string) => {
 		store.get("backgrounds").filter((bg) => bg.id !== id),
 	);
 	return true;
+});
+
+ipcMain.handle("images:add", () => {
+	const picked = pickImageAsDataUrl();
+	if (picked) {
+		const item: ImageAsset = { id: randomUUID(), ...picked };
+		store.set("images", [...store.get("images"), item]);
+	}
+	return store.get("images");
+});
+
+ipcMain.handle("images:delete", (_event, id: string) => {
+	store.set(
+		"images",
+		store.get("images").filter((img) => img.id !== id),
+	);
+	return store.get("images");
 });
 
 ipcMain.handle("sync:get-local-info", () => sync.getLocalInfo());
@@ -374,6 +436,11 @@ ipcMain.handle("output:send-slide", (_event, slide: { text: string; settings: un
 
 ipcMain.handle("output:go-black", () => {
 	outputWin?.webContents.send("go-black");
+	return true;
+});
+
+ipcMain.handle("output:show-image", (_event, dataUrl: string) => {
+	outputWin?.webContents.send("show-image", dataUrl);
 	return true;
 });
 

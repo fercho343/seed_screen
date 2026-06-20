@@ -8,18 +8,30 @@ interface LiveSlide {
 	settings: SlideSettings;
 }
 
+type OutputContent = { kind: "slide"; slide: LiveSlide } | { kind: "image"; dataUrl: string } | null;
+
 export function OutputView() {
-	const [slide, setSlide] = useState<LiveSlide | null>(null);
+	const [content, setContent] = useState<OutputContent>(null);
 
 	useEffect(() => {
-		window.electronAPI.onShowSlide((s) => setSlide(s));
-		window.electronAPI.onGoBlack(() => setSlide(null));
+		window.electronAPI.onShowSlide((s) => setContent({ kind: "slide", slide: s }));
+		window.electronAPI.onGoBlack(() => setContent(null));
+		window.electronAPI.onShowImage((dataUrl) => setContent({ kind: "image", dataUrl }));
 	}, []);
 
-	if (!slide) {
+	if (!content) {
 		return <div className="h-screen w-screen bg-black" />;
 	}
 
+	if (content.kind === "image") {
+		return (
+			<div className="flex h-screen w-screen items-center justify-center bg-black">
+				<img src={content.dataUrl} alt="" className="h-full w-full object-contain" />
+			</div>
+		);
+	}
+
+	const { slide } = content;
 	const settings = slide.settings ?? DEFAULT_SLIDE_SETTINGS;
 
 	return (

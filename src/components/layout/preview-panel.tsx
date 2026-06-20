@@ -1,7 +1,10 @@
+import type { ImageAsset } from "../../../electron/electron-env";
 import { PreviewCard } from "@/components/preview/preview-card";
 import { Button } from "@/components/ui/button";
 import type { SlideSettings } from "@/lib/slide-settings";
 import { cn } from "@/lib/utils";
+
+type ScreenMode = { kind: "black" } | { kind: "logo" } | { kind: "image"; id: string } | null;
 
 interface PreviewPanelProps {
 	outputOpen: boolean;
@@ -13,6 +16,11 @@ interface PreviewPanelProps {
 	settings: SlideSettings;
 	onProject: () => void;
 	onGoBlack: () => void;
+	logo: string | null;
+	images: ImageAsset[];
+	onShowLogo: () => void;
+	onShowImage: (image: ImageAsset) => void;
+	screenMode: ScreenMode;
 }
 
 export function PreviewPanel({
@@ -25,6 +33,11 @@ export function PreviewPanel({
 	settings,
 	onProject,
 	onGoBlack,
+	logo,
+	images,
+	onShowLogo,
+	onShowImage,
+	screenMode,
 }: PreviewPanelProps) {
 	const hasLive = Boolean(liveText);
 	const hasNext = Boolean(nextText);
@@ -85,19 +98,59 @@ export function PreviewPanel({
 					size="sm"
 					disabled={!outputOpen}
 					onClick={onGoBlack}
-					className="flex-1 bg-background text-xs text-muted-foreground hover:bg-hover"
+					className={cn(
+						"flex-1 text-xs",
+						screenMode?.kind === "black"
+							? "bg-emerald-600 text-white hover:bg-emerald-600/90"
+							: "bg-background text-muted-foreground hover:bg-hover",
+					)}
 				>
-					Black (B)
+					{screenMode?.kind === "black" && "● "}Black (B)
 				</Button>
 				<Button
 					variant="outline"
 					size="sm"
-					disabled
-					className="flex-1 bg-card text-xs text-muted-foreground hover:bg-hover"
+					disabled={!outputOpen || !logo}
+					onClick={onShowLogo}
+					className={cn(
+						"flex-1 text-xs",
+						screenMode?.kind === "logo"
+							? "border-emerald-500 bg-emerald-600/15 text-emerald-400"
+							: "bg-card text-muted-foreground hover:bg-hover",
+					)}
 				>
-					Logo (L)
+					{screenMode?.kind === "logo" && "● "}Logo (L)
 				</Button>
 			</div>
+
+			{images.length > 0 && (
+				<div className="flex flex-col gap-1.5">
+					<span className="text-[10px] text-text-3">Background images</span>
+					<div className="grid grid-cols-3 gap-1.5">
+						{images.map((img) => {
+							const active = screenMode?.kind === "image" && screenMode.id === img.id;
+							return (
+								<button
+									key={img.id}
+									type="button"
+									disabled={!outputOpen}
+									title={img.name}
+									onClick={() => onShowImage(img)}
+									className={cn(
+										"relative overflow-hidden rounded-md border disabled:opacity-40",
+										active ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-border",
+									)}
+								>
+									<img src={img.dataUrl} alt={img.name} className="h-10 w-full object-cover" />
+									{active && (
+										<span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-emerald-400 shadow-[0_0_4px_#34d399]" />
+									)}
+								</button>
+							);
+						})}
+					</div>
+				</div>
+			)}
 
 			<div className="mt-auto rounded-lg border border-border bg-input p-2.5">
 				<div className="flex items-center gap-1.5">

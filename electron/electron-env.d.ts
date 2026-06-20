@@ -7,6 +7,13 @@ export interface BackgroundItem {
 	value: string;
 }
 
+export interface ImageAsset {
+	id: string;
+	name: string;
+	/** Stored as a base64 data URL so it round-trips through electron-store with no separate file management. */
+	dataUrl: string;
+}
+
 export interface LocalSyncInfo {
 	hostname: string;
 	ip: string;
@@ -132,14 +139,23 @@ export type RemoteCommand =
 	| { type: "toggleOutput" };
 
 export interface ElectronAPI {
-	settingsGetAll: () => Promise<{ theme: string; backgrounds: BackgroundItem[] }>;
+	settingsGetAll: () => Promise<{
+		theme: string;
+		backgrounds: BackgroundItem[];
+		logo: string | null;
+		images: ImageAsset[];
+	}>;
 	settingsSetTheme: (theme: string) => Promise<boolean>;
+	settingsPickLogo: () => Promise<string | null>;
+	settingsClearLogo: () => Promise<boolean>;
 	backgroundsAdd: (bg: {
 		name: string;
 		type: "color" | "gradient";
 		value: string;
 	}) => Promise<BackgroundItem>;
 	backgroundsDelete: (id: string) => Promise<boolean>;
+	imagesAdd: () => Promise<ImageAsset[]>;
+	imagesDelete: (id: string) => Promise<ImageAsset[]>;
 	syncGetLocalInfo: () => Promise<LocalSyncInfo>;
 	syncGetPeers: () => Promise<SyncPeer[]>;
 	syncSearchPeers: () => Promise<SyncPeer[]>;
@@ -158,12 +174,16 @@ export interface ElectronAPI {
 	outputGetStatus: () => Promise<{ isOpen: boolean }>;
 	outputSendSlide: (slide: LiveSlidePayload) => Promise<boolean>;
 	outputGoBlack: () => Promise<boolean>;
+	outputShowImage: (dataUrl: string) => Promise<boolean>;
 	getDisplays: () => Promise<DisplayInfo[]>;
 	onDisplaysChanged: (cb: () => void) => void;
 	onOutputClosed: (cb: () => void) => void;
 	onMenuToggleOutput: (cb: () => void) => void;
+	onMenuGoBlack: (cb: () => void) => void;
+	onMenuShowLogo: (cb: () => void) => void;
 	onShowSlide: (cb: (slide: LiveSlidePayload) => void) => void;
 	onGoBlack: (cb: () => void) => void;
+	onShowImage: (cb: (dataUrl: string) => void) => void;
 	songsGetAll: () => Promise<SongRecord[]>;
 	songsAdd: (song: SongInput) => Promise<SongRecord>;
 	songsUpdate: (id: number, song: SongInput) => Promise<SongRecord | null>;

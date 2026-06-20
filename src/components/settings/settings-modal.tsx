@@ -1,5 +1,7 @@
 import {
 	Image,
+	ImagePlus,
+	Images,
 	Laptop,
 	Loader2,
 	Palette,
@@ -10,7 +12,12 @@ import {
 	X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { BackgroundItem, LocalSyncInfo, SyncPeer } from "../../../electron/electron-env";
+import type {
+	BackgroundItem,
+	ImageAsset,
+	LocalSyncInfo,
+	SyncPeer,
+} from "../../../electron/electron-env";
 import { applyTheme, DEFAULT_THEME_ID, THEMES } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,6 +26,8 @@ import { Input } from "@/components/ui/input";
 const SECTIONS = [
 	{ id: "theme", label: "Theme", icon: Palette },
 	{ id: "backgrounds", label: "Backgrounds", icon: Image },
+	{ id: "logo", label: "Logo", icon: ImagePlus },
+	{ id: "background-images", label: "Background", icon: Images },
 	{ id: "sync", label: "Sync", icon: Wifi },
 ] as const;
 
@@ -35,13 +44,17 @@ export function SettingsModal({ open, onClose, onSongsImported }: SettingsModalP
 	const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
 	const [originalThemeId, setOriginalThemeId] = useState(DEFAULT_THEME_ID);
 	const [backgrounds, setBackgrounds] = useState<BackgroundItem[]>([]);
+	const [logo, setLogo] = useState<string | null>(null);
+	const [images, setImages] = useState<ImageAsset[]>([]);
 
 	useEffect(() => {
 		if (!open) return;
-		window.electronAPI.settingsGetAll().then(({ theme, backgrounds }) => {
+		window.electronAPI.settingsGetAll().then(({ theme, backgrounds, logo, images }) => {
 			setThemeId(theme);
 			setOriginalThemeId(theme);
 			setBackgrounds(backgrounds);
+			setLogo(logo);
+			setImages(images);
 		});
 	}, [open]);
 
@@ -65,6 +78,11 @@ export function SettingsModal({ open, onClose, onSongsImported }: SettingsModalP
 	const refreshBackgrounds = async () => {
 		const { backgrounds } = await window.electronAPI.settingsGetAll();
 		setBackgrounds(backgrounds);
+	};
+
+	const refreshImages = async () => {
+		const { images } = await window.electronAPI.settingsGetAll();
+		setImages(images);
 	};
 
 	return (
@@ -113,6 +131,18 @@ export function SettingsModal({ open, onClose, onSongsImported }: SettingsModalP
 								backgrounds={backgrounds}
 								onChanged={refreshBackgrounds}
 							/>
+						)}
+						{section === "logo" && (
+							<LogoSection
+								logo={logo}
+								onChanged={async () => {
+									const { logo } = await window.electronAPI.settingsGetAll();
+									setLogo(logo);
+								}}
+							/>
+						)}
+						{section === "background-images" && (
+							<BackgroundImagesSection images={images} onChanged={refreshImages} />
 						)}
 						{section === "sync" && <SyncSection onSongsImported={onSongsImported} />}
 					</div>
@@ -318,6 +348,116 @@ function BackgroundsSection({
 								<button
 									type="button"
 									onClick={() => handleDelete(bg.id)}
+									className="shrink-0 text-text-3 hover:text-red-400"
+								>
+									<Trash2 className="size-3" />
+								</button>
+							</div>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
+function LogoSection({
+	logo,
+	onChanged,
+}: {
+	logo: string | null;
+	onChanged: () => void;
+}) {
+	const [busy, setBusy] = useState(false);
+
+	const handlePick = async () => {
+		setBusy(true);
+		await window.electronAPI.settingsPickLogo();
+		setBusy(false);
+		onChanged();
+	};
+
+	const handleClear = async () => {
+		await window.electronAPI.settingsClearLogo();
+		onChanged();
+	};
+
+	return (
+		<div>
+			<h3 className="text-sm font-semibold text-foreground">Logo</h3>
+			<p className="mt-1 mb-5 text-xs leading-relaxed text-text-3">
+				Pick an image to use as the "Logo" screen in Presentation — it shows full-screen on the
+				audience output, just like the black screen.
+			</p>
+
+			<div className="flex items-center gap-4 rounded-lg border border-border bg-input p-4">
+				<div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-card">
+					{logo ? (
+						<img src={logo} alt="Logo" className="h-full w-full object-contain" />
+					) : (
+						<span className="text-[10px] text-text-4">No logo</span>
+					)}
+				</div>
+				<div className="flex flex-col gap-2">
+					<Button size="sm" disabled={busy} onClick={handlePick}>
+						{busy ? "Choosing..." : logo ? "Change logo" : "Choose logo"}
+					</Button>
+					{logo && (
+						<Button variant="outline" size="sm" className="bg-card" onClick={handleClear}>
+							Remove logo
+						</Button>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function BackgroundImagesSection({
+	images,
+	onChanged,
+}: {
+	images: ImageAsset[];
+	onChanged: () => void;
+}) {
+	const [busy, setBusy] = useState(false);
+
+	const handleAdd = async () => {
+		setBusy(true);
+		await window.electronAPI.imagesAdd();
+		setBusy(false);
+		onChanged();
+	};
+
+	const handleDelete = async (id: string) => {
+		await window.electronAPI.imagesDelete(id);
+		onChanged();
+	};
+
+	return (
+		<div>
+			<h3 className="text-sm font-semibold text-foreground">Background images</h3>
+			<p className="mt-1 mb-5 text-xs leading-relaxed text-text-3">
+				Add custom images that work just like the black screen and logo — pick one to show it
+				full-screen on the audience output, e.g. for sponsor slides or event artwork.
+			</p>
+
+			<Button size="sm" disabled={busy} onClick={handleAdd}>
+				{busy ? "Choosing..." : "+ Add image"}
+			</Button>
+
+			{images.length === 0 ? (
+				<p className="py-6 text-center text-xs text-text-3">No background images yet</p>
+			) : (
+				<div className="mt-4 grid grid-cols-3 gap-2.5">
+					{images.map((img) => (
+						<div key={img.id} className="overflow-hidden rounded-md border border-border">
+							<img src={img.dataUrl} alt={img.name} className="h-20 w-full object-cover" />
+							<div className="flex items-center justify-between bg-input px-2 py-1.5">
+								<span className="truncate text-[10px] text-text-3">{img.name}</span>
+								<button
+									type="button"
+									onClick={() => handleDelete(img.id)}
 									className="shrink-0 text-text-3 hover:text-red-400"
 								>
 									<Trash2 className="size-3" />

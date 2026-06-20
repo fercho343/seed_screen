@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
 	DisplayInfo,
+	ImageAsset,
 	RemoteCommand,
 	RemoteState,
 	RemoteStatus,
@@ -23,6 +24,8 @@ import { applyTheme } from "@/lib/themes";
 
 type SongFormTarget = "new" | "new-ai" | SongRecord | null;
 
+type ScreenMode = { kind: "black" } | { kind: "logo" } | { kind: "image"; id: string } | null;
+
 function App() {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [service, setService] = useState<ServiceItem[]>([]);
@@ -39,6 +42,16 @@ function App() {
 	const [translateSong, setTranslateSong] = useState<SongRecord | null>(null);
 	const [slideSettings, setSlideSettings] = useState<SlideSettings>(DEFAULT_SLIDE_SETTINGS);
 	const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>({ active: false, url: null });
+	const [logo, setLogo] = useState<string | null>(null);
+	const [images, setImages] = useState<ImageAsset[]>([]);
+	const [screenMode, setScreenMode] = useState<ScreenMode>(null);
+
+	const loadLogoAndImages = useCallback(() => {
+		window.electronAPI.settingsGetAll().then(({ logo, images }) => {
+			setLogo(logo);
+			setImages(images);
+		});
+	}, []);
 
 	const loadSongs = useCallback(() => {
 		window.electronAPI.songsGetAll().then(setSongs);
@@ -69,8 +82,33 @@ function App() {
 	const toggleOutput = useCallback(async () => {
 		const { opened } = await window.electronAPI.outputToggle(selectedDisplay ?? undefined);
 		setOutputOpen(opened);
-		if (!opened) clearLive();
+		if (!opened) {
+			clearLive();
+			setScreenMode(null);
+		}
 	}, [selectedDisplay, clearLive]);
+
+	const goBlack = useCallback(() => {
+		window.electronAPI.outputGoBlack();
+		clearLive();
+		setScreenMode({ kind: "black" });
+	}, [clearLive]);
+
+	const showLogo = useCallback(() => {
+		if (!logo) return;
+		window.electronAPI.outputShowImage(logo);
+		clearLive();
+		setScreenMode({ kind: "logo" });
+	}, [logo, clearLive]);
+
+	const showImage = useCallback(
+		(image: ImageAsset) => {
+			window.electronAPI.outputShowImage(image.dataUrl);
+			clearLive();
+			setScreenMode({ kind: "image", id: image.id });
+		},
+		[clearLive],
+	);
 
 	useEffect(() => {
 		window.electronAPI.settingsGetAll().then(({ theme }) => applyTheme(theme));
@@ -78,11 +116,13 @@ function App() {
 		window.electronAPI.remoteGetStatus().then(setRemoteStatus);
 		loadSongs();
 		loadDisplays();
+		loadLogoAndImages();
 
 		window.electronAPI.onOpenSettings(() => setSettingsOpen(true));
 		window.electronAPI.onOutputClosed(() => {
 			setOutputOpen(false);
 			clearLive();
+			setScreenMode(null);
 		});
 		window.electronAPI.onDisplaysChanged(() => loadDisplays());
 		window.electronAPI.onMenuNewSong(() => setSongFormTarget("new"));
@@ -98,7 +138,7 @@ function App() {
 			window.ipcRenderer.removeAllListeners("remote:status-changed");
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [loadSongs, loadDisplays]);
+	}, [loadSongs, loadDisplays, loadLogoAndImages]);
 
 	// "Project" menu item / Cmd+P needs the latest toggleOutput closure (it
 	// depends on selectedDisplay), so it's wired separately from the effect above.
@@ -108,6 +148,17 @@ function App() {
 			window.ipcRenderer.removeAllListeners("menu-toggle-output");
 		};
 	}, [toggleOutput]);
+
+	// Same deal for the black-screen/logo menu accelerators — they need the
+	// latest goBlack/showLogo closures (which depend on clearLive/logo).
+	useEffect(() => {
+		window.electronAPI.onMenuGoBlack(() => goBlack());
+		window.electronAPI.onMenuShowLogo(() => showLogo());
+		return () => {
+			window.ipcRenderer.removeAllListeners("menu-go-black");
+			window.ipcRenderer.removeAllListeners("menu-show-logo");
+		};
+	}, [goBlack, showLogo]);
 
 	const addToService = useCallback((item: Omit<ServiceItem, "scheduleId">) => {
 		setService((prev) => {
@@ -143,6 +194,7 @@ function App() {
 			setLiveSlideId(slide.id);
 			setLiveText(text);
 			setLiveTitle(slide.reference);
+			setScreenMode(null);
 		},
 		[outputOpen, slideSettings],
 	);
@@ -185,11 +237,6 @@ function App() {
 		},
 		[],
 	);
-
-	const goBlack = useCallback(() => {
-		window.electronAPI.outputGoBlack();
-		clearLive();
-	}, [clearLive]);
 
 	const selectedItem = service.find((item) => item.scheduleId === selectedItemId);
 
@@ -363,11 +410,19 @@ function App() {
 					settings={slideSettings}
 					onProject={() => selectedItem && selectedSlide && sendToLive(selectedItem, selectedSlide)}
 					onGoBlack={goBlack}
+					logo={logo}
+					images={images}
+					onShowLogo={showLogo}
+					onShowImage={showImage}
+					screenMode={screenMode}
 				/>
 			</div>
 			<SettingsModal
 				open={settingsOpen}
-				onClose={() => setSettingsOpen(false)}
+				onClose={() => {
+					setSettingsOpen(false);
+					loadLogoAndImages();
+				}}
 				onSongsImported={loadSongs}
 			/>
 			<SongForm

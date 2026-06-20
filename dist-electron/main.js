@@ -13,7 +13,7 @@ import crypto$1, { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import electron, { app as app$1, ipcMain as ipcMain$1, screen, BrowserWindow, Menu } from "electron";
+import electron, { app as app$1, ipcMain as ipcMain$1, screen, BrowserWindow, Menu, dialog } from "electron";
 import process$1 from "node:process";
 import { promisify, isDeepStrictEqual } from "node:util";
 import assert from "node:assert";
@@ -20676,8 +20676,31 @@ function stop() {
   httpServer = null;
 }
 const store = new ElectronStore({
-  defaults: { theme: "marino", backgrounds: [] }
+  defaults: { theme: "marino", backgrounds: [], logo: null, images: [] }
 });
+const IMAGE_MIME = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml"
+};
+function pickImageAsDataUrl() {
+  const result = dialog.showOpenDialogSync({
+    properties: ["openFile"],
+    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] }]
+  });
+  const filePath = result == null ? void 0 : result[0];
+  if (!filePath) return null;
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = IMAGE_MIME[ext] ?? "application/octet-stream";
+  const base64 = fs.readFileSync(filePath).toString("base64");
+  return {
+    name: path.basename(filePath, ext),
+    dataUrl: `data:${mime};base64,${base64}`
+  };
+}
 let bibleData = null;
 function getBible() {
   if (bibleData) return bibleData;
@@ -20900,11 +20923,13 @@ const templateMenu = [
       { type: "separator" },
       {
         label: "Show black screen",
-        accelerator: "B"
+        accelerator: "B",
+        click: () => win == null ? void 0 : win.webContents.send("menu-go-black")
       },
       {
         label: "Show logo",
-        accelerator: "L"
+        accelerator: "L",
+        click: () => win == null ? void 0 : win.webContents.send("menu-show-logo")
       },
       { type: "separator" },
       {
@@ -20934,10 +20959,22 @@ const templateMenu = [
 ];
 ipcMain$1.handle("settings:get-all", () => ({
   theme: store.get("theme"),
-  backgrounds: store.get("backgrounds")
+  backgrounds: store.get("backgrounds"),
+  logo: store.get("logo"),
+  images: store.get("images")
 }));
 ipcMain$1.handle("settings:set-theme", (_event, theme) => {
   store.set("theme", theme);
+  return true;
+});
+ipcMain$1.handle("settings:pick-logo", () => {
+  const picked = pickImageAsDataUrl();
+  if (!picked) return null;
+  store.set("logo", picked.dataUrl);
+  return picked.dataUrl;
+});
+ipcMain$1.handle("settings:clear-logo", () => {
+  store.set("logo", null);
   return true;
 });
 ipcMain$1.handle(
@@ -20954,6 +20991,21 @@ ipcMain$1.handle("backgrounds:delete", (_event, id2) => {
     store.get("backgrounds").filter((bg) => bg.id !== id2)
   );
   return true;
+});
+ipcMain$1.handle("images:add", () => {
+  const picked = pickImageAsDataUrl();
+  if (picked) {
+    const item = { id: randomUUID(), ...picked };
+    store.set("images", [...store.get("images"), item]);
+  }
+  return store.get("images");
+});
+ipcMain$1.handle("images:delete", (_event, id2) => {
+  store.set(
+    "images",
+    store.get("images").filter((img) => img.id !== id2)
+  );
+  return store.get("images");
 });
 ipcMain$1.handle("sync:get-local-info", () => getLocalInfo());
 ipcMain$1.handle("sync:get-peers", () => getPeers());
@@ -20996,6 +21048,10 @@ ipcMain$1.handle("output:send-slide", (_event, slide) => {
 });
 ipcMain$1.handle("output:go-black", () => {
   outputWin == null ? void 0 : outputWin.webContents.send("go-black");
+  return true;
+});
+ipcMain$1.handle("output:show-image", (_event, dataUrl) => {
+  outputWin == null ? void 0 : outputWin.webContents.send("show-image", dataUrl);
   return true;
 });
 ipcMain$1.handle("songs:get-all", () => getSongs());

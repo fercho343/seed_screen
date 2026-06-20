@@ -32,9 +32,13 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
 contextBridge.exposeInMainWorld("electronAPI", {
 	settingsGetAll: () => ipcRenderer.invoke("settings:get-all"),
 	settingsSetTheme: (theme: string) => ipcRenderer.invoke("settings:set-theme", theme),
+	settingsPickLogo: () => ipcRenderer.invoke("settings:pick-logo"),
+	settingsClearLogo: () => ipcRenderer.invoke("settings:clear-logo"),
 	backgroundsAdd: (bg: { name: string; type: "color" | "gradient"; value: string }) =>
 		ipcRenderer.invoke("backgrounds:add", bg),
 	backgroundsDelete: (id: string) => ipcRenderer.invoke("backgrounds:delete", id),
+	imagesAdd: () => ipcRenderer.invoke("images:add"),
+	imagesDelete: (id: string) => ipcRenderer.invoke("images:delete", id),
 	syncGetLocalInfo: () => ipcRenderer.invoke("sync:get-local-info"),
 	syncGetPeers: () => ipcRenderer.invoke("sync:get-peers"),
 	syncSearchPeers: () => ipcRenderer.invoke("sync:search-peers"),
@@ -60,11 +64,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	outputSendSlide: (slide: { text: string; title?: string; settings: unknown }) =>
 		ipcRenderer.invoke("output:send-slide", slide),
 	outputGoBlack: () => ipcRenderer.invoke("output:go-black"),
+	outputShowImage: (dataUrl: string) => ipcRenderer.invoke("output:show-image", dataUrl),
 	onOutputClosed: (cb: () => void) => ipcRenderer.on("output-window-closed", () => cb()),
 	onMenuToggleOutput: (cb: () => void) => ipcRenderer.on("menu-toggle-output", () => cb()),
+	onMenuGoBlack: (cb: () => void) => ipcRenderer.on("menu-go-black", () => cb()),
+	onMenuShowLogo: (cb: () => void) => ipcRenderer.on("menu-show-logo", () => cb()),
 	onShowSlide: (cb: (slide: { text: string; title?: string; settings: unknown }) => void) =>
 		ipcRenderer.on("show-slide", (_event, slide) => cb(slide)),
 	onGoBlack: (cb: () => void) => ipcRenderer.on("go-black", () => cb()),
+	onShowImage: (cb: (dataUrl: string) => void) =>
+		ipcRenderer.on("show-image", (_event, dataUrl) => cb(dataUrl)),
 	songsGetAll: () => ipcRenderer.invoke("songs:get-all"),
 	songsAdd: (song: SongInput) => ipcRenderer.invoke("songs:add", song),
 	songsUpdate: (id: number, song: SongInput) => ipcRenderer.invoke("songs:update", id, song),

@@ -21,7 +21,13 @@
     "target": [
       "dmg"
     ],
-    "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
+    "icon": "build/icons/icon.icns",
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
+    "category": "public.app-category.productivity"
+  },
+  "dmg": {
+    "icon": "build/icons/icon.icns",
+    "iconSize": 100
   },
   "win": {
     "target": [
@@ -32,6 +38,7 @@
         ]
       }
     ],
+    "icon": "build/icons/icon.ico",
     "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
   },
   "nsis": {
@@ -44,6 +51,7 @@
     "target": [
       "AppImage"
     ],
+    "icon": "build/icons",
     "artifactName": "${productName}-Linux-${version}.${ext}"
   }
 }

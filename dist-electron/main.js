@@ -20339,6 +20339,13 @@ const songs = sqliteTable("songs", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`)
 });
+const media = sqliteTable("media", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  filePath: text("file_path").notNull(),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`)
+});
 let dbInstance = null;
 function getDb() {
   if (dbInstance) return dbInstance;
@@ -20354,6 +20361,13 @@ function getDb() {
 			slides TEXT NOT NULL DEFAULT '[]',
 			created_at TEXT NOT NULL DEFAULT (datetime('now')),
 			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+		CREATE TABLE IF NOT EXISTS media (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
 		);
 	`);
   dbInstance = drizzle(sqlite);
@@ -20414,6 +20428,27 @@ function importSongs(incoming) {
     added++;
   }
   return { added, total: (incoming == null ? void 0 : incoming.length) ?? 0 };
+}
+function parseMedia(row) {
+  return {
+    id: row.id,
+    type: row.type === "video" ? "video" : "image",
+    title: row.title,
+    filePath: row.filePath,
+    createdAt: row.createdAt
+  };
+}
+function getMedia() {
+  const rows = getDb().select().from(media).orderBy(media.title).all();
+  return rows.map(parseMedia);
+}
+function addMedia(input) {
+  const row = getDb().insert(media).values({ type: input.type, title: input.title.trim(), filePath: input.filePath }).returning().get();
+  return parseMedia(row);
+}
+function deleteMedia(id2) {
+  const row = getDb().delete(media).where(eq(media.id, id2)).returning().get();
+  return row ? parseMedia(row) : null;
 }
 const PORT = 3849;
 const MIME = {
@@ -20704,6 +20739,26 @@ function pickImageAsDataUrl() {
     dataUrl: `data:${mime};base64,${base64}`
   };
 }
+const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
+function mediaDir() {
+  const dir = path.join(app$1.getPath("userData"), "media");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function pickAndAddMedia() {
+  const result = dialog.showOpenDialogSync({
+    properties: ["openFile", "multiSelections"],
+    filters: [{ name: "Media", extensions: [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS] }]
+  });
+  for (const filePath of result ?? []) {
+    const ext = path.extname(filePath).toLowerCase().slice(1);
+    const type2 = VIDEO_EXTENSIONS.includes(ext) ? "video" : "image";
+    const destPath = path.join(mediaDir(), `${randomUUID()}.${ext}`);
+    fs.copyFileSync(filePath, destPath);
+    addMedia({ type: type2, title: path.basename(filePath, path.extname(filePath)), filePath: destPath });
+  }
+}
 let bibleData = null;
 function getBible() {
   if (bibleData) return bibleData;
@@ -20829,7 +20884,10 @@ function createOutputWindow(displayId) {
     alwaysOnTop: true,
     backgroundColor: "#000000",
     webPreferences: {
-      preload: path.join(__dirname$1, "preload.mjs")
+      preload: path.join(__dirname$1, "preload.mjs"),
+      // Output videos must start playing the instant they're sent — there's no user
+      // gesture available on the audience screen to satisfy the default autoplay policy.
+      autoplayPolicy: "no-user-gesture-required"
     }
   });
   if (VITE_DEV_SERVER_URL) {
@@ -21057,10 +21115,27 @@ ipcMain$1.handle("output:show-image", (_event, dataUrl) => {
   outputWin == null ? void 0 : outputWin.webContents.send("show-image", dataUrl);
   return true;
 });
+ipcMain$1.handle("output:show-video", (_event, fileUrl) => {
+  outputWin == null ? void 0 : outputWin.webContents.send("show-video", fileUrl);
+  return true;
+});
 ipcMain$1.handle("songs:get-all", () => getSongs());
 ipcMain$1.handle("songs:add", (_event, input) => addSong(input));
 ipcMain$1.handle("songs:update", (_event, id2, input) => updateSong(id2, input));
 ipcMain$1.handle("songs:delete", (_event, id2) => deleteSong(id2));
+ipcMain$1.handle("media:get-all", () => getMedia());
+ipcMain$1.handle("media:add", () => {
+  pickAndAddMedia();
+  return getMedia();
+});
+ipcMain$1.handle("media:delete", (_event, id2) => {
+  const removed = deleteMedia(id2);
+  if (removed) {
+    fs.rm(removed.filePath, { force: true }, () => {
+    });
+  }
+  return getMedia();
+});
 ipcMain$1.handle("bible:get-books", () => {
   return getBible().books.map((b, i) => ({
     id: b.book_usfm,

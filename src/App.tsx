@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
+	BackgroundItem,
 	DisplayInfo,
 	ImageAsset,
 	RemoteCommand,
@@ -34,6 +35,7 @@ function App() {
 	const [liveSlideId, setLiveSlideId] = useState<string | null>(null);
 	const [liveText, setLiveText] = useState<string | null>(null);
 	const [liveTitle, setLiveTitle] = useState<string | undefined>(undefined);
+	const [liveMedia, setLiveMedia] = useState<{ url: string; type: "image" | "video" } | null>(null);
 	const [outputOpen, setOutputOpen] = useState(false);
 	const [displays, setDisplays] = useState<DisplayInfo[]>([]);
 	const [selectedDisplay, setSelectedDisplay] = useState<number | null>(null);
@@ -45,11 +47,13 @@ function App() {
 	const [logo, setLogo] = useState<string | null>(null);
 	const [images, setImages] = useState<ImageAsset[]>([]);
 	const [screenMode, setScreenMode] = useState<ScreenMode>(null);
+	const [customBackgrounds, setCustomBackgrounds] = useState<BackgroundItem[]>([]);
 
 	const loadLogoAndImages = useCallback(() => {
-		window.electronAPI.settingsGetAll().then(({ logo, images }) => {
+		window.electronAPI.settingsGetAll().then(({ logo, images, backgrounds }) => {
 			setLogo(logo);
 			setImages(images);
+			setCustomBackgrounds(backgrounds);
 		});
 	}, []);
 
@@ -77,6 +81,7 @@ function App() {
 		setLiveSlideId(null);
 		setLiveText(null);
 		setLiveTitle(undefined);
+		setLiveMedia(null);
 	}, []);
 
 	const toggleOutput = useCallback(async () => {
@@ -189,12 +194,21 @@ function App() {
 	const sendToLive = useCallback(
 		async (item: ServiceItem, slide: ServiceSlide) => {
 			if (!outputOpen) return;
+			setScreenMode(null);
+			setLiveSlideId(slide.id);
+			if (slide.mediaUrl && (item.type === "image" || item.type === "video")) {
+				if (item.type === "image") await window.electronAPI.outputShowImage(slide.mediaUrl);
+				else await window.electronAPI.outputShowVideo(slide.mediaUrl);
+				setLiveMedia({ url: slide.mediaUrl, type: item.type });
+				setLiveText(null);
+				setLiveTitle(undefined);
+				return;
+			}
 			const text = getSlideDisplayText(slide, item.displayLanguage, item.slideLanguageOverrides);
 			await window.electronAPI.outputSendSlide({ text, title: slide.reference, settings: slideSettings });
-			setLiveSlideId(slide.id);
+			setLiveMedia(null);
 			setLiveText(text);
 			setLiveTitle(slide.reference);
-			setScreenMode(null);
 		},
 		[outputOpen, slideSettings],
 	);
@@ -388,6 +402,7 @@ function App() {
 				slideSettings={slideSettings}
 				onSlideSettingsChange={setSlideSettings}
 				remoteStatus={remoteStatus}
+				customBackgrounds={customBackgrounds}
 			/>
 			<div className="flex flex-1 gap-0.5 overflow-hidden bg-background p-0.5">
 				<LeftSidebar
@@ -416,8 +431,9 @@ function App() {
 					outputOpen={outputOpen}
 					liveText={liveText ?? undefined}
 					liveTitle={liveTitle}
+					liveMedia={liveMedia}
 					nextText={
-						selectedItem && selectedSlide
+						selectedItem && selectedSlide && !selectedSlide.mediaUrl
 							? getSlideDisplayText(
 									selectedSlide,
 									selectedItem.displayLanguage,
@@ -426,6 +442,11 @@ function App() {
 							: undefined
 					}
 					nextTitle={selectedSlide?.reference}
+					nextMedia={
+						selectedSlide?.mediaUrl && (selectedItem?.type === "image" || selectedItem?.type === "video")
+							? { url: selectedSlide.mediaUrl, type: selectedItem.type }
+							: null
+					}
 					canProject={!!selectedSlide}
 					settings={slideSettings}
 					onProject={() => selectedItem && selectedSlide && sendToLive(selectedItem, selectedSlide)}

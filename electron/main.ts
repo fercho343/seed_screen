@@ -12,7 +12,17 @@ import {
 	type MenuItemConstructorOptions,
 } from "electron";
 import Store from "electron-store";
-import { addSong, deleteSong, getSongs, importSongs, type SongInput, updateSong } from "./db";
+import {
+	addMedia,
+	addSong,
+	deleteMedia,
+	deleteSong,
+	getMedia,
+	getSongs,
+	importSongs,
+	type SongInput,
+	updateSong,
+} from "./db";
 import type { BackgroundItem, ImageAsset } from "./electron-env";
 import * as remote from "./remote";
 import type { RemoteState } from "./remote";
@@ -53,6 +63,30 @@ function pickImageAsDataUrl(): { name: string; dataUrl: string } | null {
 		name: path.basename(filePath, ext),
 		dataUrl: `data:${mime};base64,${base64}`,
 	};
+}
+
+const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
+
+function mediaDir(): string {
+	const dir = path.join(app.getPath("userData"), "media");
+	fs.mkdirSync(dir, { recursive: true });
+	return dir;
+}
+
+/** Opens a native file picker for images/videos, copies the pick into the app's media folder, and adds it to the DB. */
+function pickAndAddMedia() {
+	const result = dialog.showOpenDialogSync({
+		properties: ["openFile", "multiSelections"],
+		filters: [{ name: "Media", extensions: [...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS] }],
+	});
+	for (const filePath of result ?? []) {
+		const ext = path.extname(filePath).toLowerCase().slice(1);
+		const type = VIDEO_EXTENSIONS.includes(ext) ? "video" : "image";
+		const destPath = path.join(mediaDir(), `${randomUUID()}.${ext}`);
+		fs.copyFileSync(filePath, destPath);
+		addMedia({ type, title: path.basename(filePath, path.extname(filePath)), filePath: destPath });
+	}
 }
 
 interface BibleVerseItem {
@@ -183,6 +217,9 @@ function createOutputWindow(displayId?: number) {
 		backgroundColor: "#000000",
 		webPreferences: {
 			preload: path.join(__dirname, "preload.mjs"),
+			// Output videos must start playing the instant they're sent — there's no user
+			// gesture available on the audience screen to satisfy the default autoplay policy.
+			autoplayPolicy: "no-user-gesture-required",
 		},
 	});
 
@@ -444,6 +481,11 @@ ipcMain.handle("output:show-image", (_event, dataUrl: string) => {
 	return true;
 });
 
+ipcMain.handle("output:show-video", (_event, fileUrl: string) => {
+	outputWin?.webContents.send("show-video", fileUrl);
+	return true;
+});
+
 ipcMain.handle("songs:get-all", () => getSongs());
 
 ipcMain.handle("songs:add", (_event, input: SongInput) => addSong(input));
@@ -451,6 +493,21 @@ ipcMain.handle("songs:add", (_event, input: SongInput) => addSong(input));
 ipcMain.handle("songs:update", (_event, id: number, input: SongInput) => updateSong(id, input));
 
 ipcMain.handle("songs:delete", (_event, id: number) => deleteSong(id));
+
+ipcMain.handle("media:get-all", () => getMedia());
+
+ipcMain.handle("media:add", () => {
+	pickAndAddMedia();
+	return getMedia();
+});
+
+ipcMain.handle("media:delete", (_event, id: number) => {
+	const removed = deleteMedia(id);
+	if (removed) {
+		fs.rm(removed.filePath, { force: true }, () => {});
+	}
+	return getMedia();
+});
 
 ipcMain.handle("bible:get-books", () => {
 	return getBible().books.map((b, i) => ({

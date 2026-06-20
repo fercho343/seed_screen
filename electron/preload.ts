@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("output:send-slide", slide),
 	outputGoBlack: () => ipcRenderer.invoke("output:go-black"),
 	outputShowImage: (dataUrl: string) => ipcRenderer.invoke("output:show-image", dataUrl),
+	outputShowVideo: (fileUrl: string) => ipcRenderer.invoke("output:show-video", fileUrl),
 	onOutputClosed: (cb: () => void) => ipcRenderer.on("output-window-closed", () => cb()),
 	onMenuToggleOutput: (cb: () => void) => ipcRenderer.on("menu-toggle-output", () => cb()),
 	onMenuGoBlack: (cb: () => void) => ipcRenderer.on("menu-go-black", () => cb()),
@@ -74,10 +75,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	onGoBlack: (cb: () => void) => ipcRenderer.on("go-black", () => cb()),
 	onShowImage: (cb: (dataUrl: string) => void) =>
 		ipcRenderer.on("show-image", (_event, dataUrl) => cb(dataUrl)),
+	onShowVideo: (cb: (fileUrl: string) => void) =>
+		ipcRenderer.on("show-video", (_event, fileUrl) => cb(fileUrl)),
 	songsGetAll: () => ipcRenderer.invoke("songs:get-all"),
 	songsAdd: (song: SongInput) => ipcRenderer.invoke("songs:add", song),
 	songsUpdate: (id: number, song: SongInput) => ipcRenderer.invoke("songs:update", id, song),
 	songsDelete: (id: number) => ipcRenderer.invoke("songs:delete", id),
 	onMenuNewSong: (cb: () => void) => ipcRenderer.on("menu-new-song", () => cb()),
 	onMenuNewSongAI: (cb: () => void) => ipcRenderer.on("menu-new-song-ai", () => cb()),
+	mediaGetAll: () => ipcRenderer.invoke("media:get-all"),
+	mediaAdd: () => ipcRenderer.invoke("media:add"),
+	mediaDelete: (id: number) => ipcRenderer.invoke("media:delete", id),
 });

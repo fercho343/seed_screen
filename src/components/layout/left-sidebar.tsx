@@ -2,6 +2,7 @@ import { BookOpen, Image, Music, Plus, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
 import type { SongRecord } from "../../../electron/electron-env";
 import { BiblePanel } from "@/components/bible/bible-panel";
+import { MediaPanel } from "@/components/media/media-panel";
 import { SongItem } from "@/components/songs/song-item";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -169,13 +170,8 @@ export function LeftSidebar({
 					<BiblePanel onAddToService={onAddToService} />
 				</TabsContent>
 
-				<TabsContent
-					value="media"
-					className="m-0 flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
-				>
-					<Image className="size-7 text-text-4" />
-					<p className="text-xs font-medium text-text-3">Media library</p>
-					<p className="text-[11px] text-text-4">Coming soon</p>
+				<TabsContent value="media" className="m-0 flex flex-1 flex-col overflow-hidden">
+					<MediaPanel service={service} onAddToService={onAddToService} />
 				</TabsContent>
 			</Tabs>
 		</aside>

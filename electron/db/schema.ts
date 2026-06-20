@@ -14,3 +14,13 @@ export const songs = sqliteTable("songs", {
 		.notNull()
 		.default(sql`(datetime('now'))`),
 });
+
+export const media = sqliteTable("media", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	type: text("type").notNull(),
+	title: text("title").notNull(),
+	filePath: text("file_path").notNull(),
+	createdAt: text("created_at")
+		.notNull()
+		.default(sql`(datetime('now'))`),
+});

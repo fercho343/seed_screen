@@ -56,6 +56,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   outputSendSlide: (slide) => electron.ipcRenderer.invoke("output:send-slide", slide),
   outputGoBlack: () => electron.ipcRenderer.invoke("output:go-black"),
   outputShowImage: (dataUrl) => electron.ipcRenderer.invoke("output:show-image", dataUrl),
+  outputShowVideo: (fileUrl) => electron.ipcRenderer.invoke("output:show-video", fileUrl),
   onOutputClosed: (cb) => electron.ipcRenderer.on("output-window-closed", () => cb()),
   onMenuToggleOutput: (cb) => electron.ipcRenderer.on("menu-toggle-output", () => cb()),
   onMenuGoBlack: (cb) => electron.ipcRenderer.on("menu-go-black", () => cb()),
@@ -63,10 +64,14 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   onShowSlide: (cb) => electron.ipcRenderer.on("show-slide", (_event, slide) => cb(slide)),
   onGoBlack: (cb) => electron.ipcRenderer.on("go-black", () => cb()),
   onShowImage: (cb) => electron.ipcRenderer.on("show-image", (_event, dataUrl) => cb(dataUrl)),
+  onShowVideo: (cb) => electron.ipcRenderer.on("show-video", (_event, fileUrl) => cb(fileUrl)),
   songsGetAll: () => electron.ipcRenderer.invoke("songs:get-all"),
   songsAdd: (song) => electron.ipcRenderer.invoke("songs:add", song),
   songsUpdate: (id, song) => electron.ipcRenderer.invoke("songs:update", id, song),
   songsDelete: (id) => electron.ipcRenderer.invoke("songs:delete", id),
   onMenuNewSong: (cb) => electron.ipcRenderer.on("menu-new-song", () => cb()),
-  onMenuNewSongAI: (cb) => electron.ipcRenderer.on("menu-new-song-ai", () => cb())
+  onMenuNewSongAI: (cb) => electron.ipcRenderer.on("menu-new-song-ai", () => cb()),
+  mediaGetAll: () => electron.ipcRenderer.invoke("media:get-all"),
+  mediaAdd: () => electron.ipcRenderer.invoke("media:add"),
+  mediaDelete: (id) => electron.ipcRenderer.invoke("media:delete", id)
 });

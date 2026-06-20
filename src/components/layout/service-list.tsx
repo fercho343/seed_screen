@@ -1,4 +1,4 @@
-import { BookOpen, Clipboard, Languages, Music, X } from "lucide-react";
+import { BookOpen, Clapperboard, Clipboard, Image, Languages, Music, X } from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -174,6 +174,10 @@ export function ServiceList({
 							</div>
 							{item.type === "bible" ? (
 								<BookOpen className="size-3.5 shrink-0 text-text-3" />
+							) : item.type === "image" ? (
+								<Image className="size-3.5 shrink-0 text-text-3" />
+							) : item.type === "video" ? (
+								<Clapperboard className="size-3.5 shrink-0 text-text-3" />
 							) : (
 								<Music className="size-3.5 shrink-0 text-text-3" />
 							)}

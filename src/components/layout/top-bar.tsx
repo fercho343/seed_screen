@@ -1,5 +1,7 @@
 import { AlignCenter, AlignLeft, Bold, Italic, Monitor, Smartphone } from "lucide-react";
-import type { DisplayInfo, RemoteStatus } from "../../../electron/electron-env";
+import QRCode from "qrcode";
+import { useEffect, useState } from "react";
+import type { BackgroundItem, DisplayInfo, RemoteStatus } from "../../../electron/electron-env";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -28,9 +30,15 @@ const ALIGN_ITEMS = [
 interface BackgroundPickerProps {
 	selected: SlideSettings["background"];
 	onSelect: (bg: SlideSettings["background"]) => void;
+	customBackgrounds?: BackgroundItem[];
 }
 
-function BackgroundPicker({ selected, onSelect }: BackgroundPickerProps) {
+function BackgroundPicker({ selected, onSelect, customBackgrounds = [] }: BackgroundPickerProps) {
+	const allBackgrounds = [
+		...BACKGROUNDS,
+		...customBackgrounds.map((bg) => ({ id: bg.id, label: bg.name, type: bg.type, value: bg.value })),
+	];
+
 	return (
 		<Popover>
 			<PopoverTrigger className="flex items-center gap-1.5 rounded-md px-1.5 py-1.5 hover:bg-hover">
@@ -46,7 +54,7 @@ function BackgroundPicker({ selected, onSelect }: BackgroundPickerProps) {
 			</PopoverTrigger>
 			<PopoverContent className="w-auto bg-card p-3">
 				<div className="grid grid-cols-3 gap-2">
-					{BACKGROUNDS.map((bg) => (
+					{allBackgrounds.map((bg) => (
 						<button
 							key={bg.id}
 							type="button"
@@ -66,6 +74,39 @@ function BackgroundPicker({ selected, onSelect }: BackgroundPickerProps) {
 	);
 }
 
+function RemoteQrButton({ url }: { url: string }) {
+	const [qr, setQr] = useState<string | null>(null);
+
+	useEffect(() => {
+		QRCode.toDataURL(url, { width: 220, margin: 1 }).then(setQr);
+	}, [url]);
+
+	return (
+		<Popover>
+			<PopoverTrigger
+				className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1.5 text-[11px] text-emerald-400 hover:bg-hover"
+				title="Mostrar codigo QR del control remoto"
+			>
+				<Smartphone className="size-3.5" />
+				Remote control enabled
+			</PopoverTrigger>
+			<PopoverContent className="w-auto bg-card p-4">
+				<div className="flex flex-col items-center gap-2.5">
+					{qr ? (
+						<img src={qr} alt="QR del control remoto" className="size-44 rounded-md" />
+					) : (
+						<div className="flex size-44 items-center justify-center text-xs text-text-3">
+							Generando QR...
+						</div>
+					)}
+					<p className="text-[11px] text-text-3">Escanea para abrir el control remoto</p>
+					<p className="font-mono text-[11px] text-muted-foreground">{url.replace("http://", "")}</p>
+				</div>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 interface TopBarProps {
 	outputOpen: boolean;
 	onToggleOutput: () => void;
@@ -75,6 +116,7 @@ interface TopBarProps {
 	slideSettings: SlideSettings;
 	onSlideSettingsChange: (updater: (s: SlideSettings) => SlideSettings) => void;
 	remoteStatus?: RemoteStatus;
+	customBackgrounds?: BackgroundItem[];
 }
 
 export function TopBar({
@@ -86,6 +128,7 @@ export function TopBar({
 	slideSettings,
 	onSlideSettingsChange,
 	remoteStatus,
+	customBackgrounds,
 }: TopBarProps) {
 	const activeStyles = [
 		...(slideSettings.bold ? ["bold"] : []),
@@ -178,6 +221,7 @@ export function TopBar({
 				<BackgroundPicker
 					selected={slideSettings.background}
 					onSelect={(bg) => onSlideSettingsChange((s) => ({ ...s, background: bg }))}
+					customBackgrounds={customBackgrounds}
 				/>
 
 				<div className="flex items-center gap-1.5 pl-1">
@@ -222,13 +266,7 @@ export function TopBar({
 				{remoteStatus?.active && remoteStatus.url && (
 					<>
 						<Separator orientation="vertical" className="h-7" />
-						<div
-							className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1.5 text-[11px] text-emerald-400"
-							title="Remote control activo (Presentation > Remote Control para desactivar)"
-						>
-							<Smartphone className="size-3.5" />
-							<span className="font-mono">{remoteStatus.url.replace("http://", "")}</span>
-						</div>
+						<RemoteQrButton url={remoteStatus.url} />
 					</>
 				)}
 

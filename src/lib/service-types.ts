@@ -6,12 +6,14 @@ export interface ServiceSlide {
 	reference?: string;
 	/** Per-language translations of `text`, keyed by ISO 639-1 code. */
 	translations?: Record<string, string>;
+	/** For "image"/"video" items: the `file://` URL of the media asset. */
+	mediaUrl?: string;
 }
 
 export interface ServiceItem {
 	scheduleId: string;
 	sourceId: string;
-	type: "song" | "bible";
+	type: "song" | "bible" | "image" | "video";
 	title: string;
 	subtitle?: string;
 	slides: ServiceSlide[];

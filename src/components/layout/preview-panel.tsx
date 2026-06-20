@@ -5,13 +5,16 @@ import type { SlideSettings } from "@/lib/slide-settings";
 import { cn } from "@/lib/utils";
 
 type ScreenMode = { kind: "black" } | { kind: "logo" } | { kind: "image"; id: string } | null;
+type LiveMedia = { url: string; type: "image" | "video" } | null;
 
 interface PreviewPanelProps {
 	outputOpen: boolean;
 	liveText?: string;
 	liveTitle?: string;
+	liveMedia?: LiveMedia;
 	nextText?: string;
 	nextTitle?: string;
+	nextMedia?: LiveMedia;
 	canProject: boolean;
 	settings: SlideSettings;
 	onProject: () => void;
@@ -23,12 +26,29 @@ interface PreviewPanelProps {
 	screenMode: ScreenMode;
 }
 
+function MediaThumb({ media, label }: { media: NonNullable<LiveMedia>; label: string }) {
+	return (
+		<div className="relative aspect-video w-full overflow-hidden rounded-lg border-2 border-border bg-black">
+			{media.type === "image" ? (
+				<img src={media.url} alt="" className="h-full w-full object-contain" />
+			) : (
+				<video src={media.url} muted className="h-full w-full object-contain" />
+			)}
+			<div className="absolute top-1.5 left-1.5 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
+				{label}
+			</div>
+		</div>
+	);
+}
+
 export function PreviewPanel({
 	outputOpen,
 	liveText,
 	liveTitle,
+	liveMedia,
 	nextText,
 	nextTitle,
+	nextMedia,
 	canProject,
 	settings,
 	onProject,
@@ -39,8 +59,8 @@ export function PreviewPanel({
 	onShowImage,
 	screenMode,
 }: PreviewPanelProps) {
-	const hasLive = Boolean(liveText);
-	const hasNext = Boolean(nextText);
+	const hasLive = Boolean(liveText) || Boolean(liveMedia);
+	const hasNext = Boolean(nextText) || Boolean(nextMedia);
 
 	return (
 		<aside className="flex w-70 shrink-0 flex-col gap-3 overflow-hidden rounded-lg bg-card p-3">
@@ -53,7 +73,10 @@ export function PreviewPanel({
 					<span>Live</span>
 					{hasLive && <span className="text-emerald-400">Active</span>}
 				</div>
-				<PreviewCard
+				{liveMedia ? (
+					<MediaThumb media={liveMedia} label="● Live" />
+				) : (
+					<PreviewCard
 						label="Live"
 						text={liveText}
 						title={liveTitle}
@@ -61,17 +84,22 @@ export function PreviewPanel({
 						isLive={hasLive}
 						settings={settings}
 					/>
+				)}
 			</div>
 
 			<div className="flex flex-col gap-1.5">
 				<span className="text-[10px] text-text-3">Next</span>
-				<PreviewCard
+				{nextMedia ? (
+					<MediaThumb media={nextMedia} label="Next" />
+				) : (
+					<PreviewCard
 						label="Next"
 						text={nextText}
 						title={nextTitle}
 						isEmpty={!hasNext}
 						settings={settings}
 					/>
+				)}
 			</div>
 
 			<button

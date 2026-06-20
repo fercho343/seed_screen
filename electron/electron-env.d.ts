@@ -73,6 +73,14 @@ export interface SongInput {
 	slides: SlideRecord[];
 }
 
+export interface MediaRecord {
+	id: number;
+	type: "image" | "video";
+	title: string;
+	filePath: string;
+	createdAt: string;
+}
+
 export interface DisplayInfo {
 	id: number;
 	label: string;
@@ -192,6 +200,7 @@ export interface ElectronAPI {
 	outputSendSlide: (slide: LiveSlidePayload) => Promise<boolean>;
 	outputGoBlack: () => Promise<boolean>;
 	outputShowImage: (dataUrl: string) => Promise<boolean>;
+	outputShowVideo: (fileUrl: string) => Promise<boolean>;
 	getDisplays: () => Promise<DisplayInfo[]>;
 	onDisplaysChanged: (cb: () => void) => void;
 	onOutputClosed: (cb: () => void) => void;
@@ -201,12 +210,16 @@ export interface ElectronAPI {
 	onShowSlide: (cb: (slide: LiveSlidePayload) => void) => void;
 	onGoBlack: (cb: () => void) => void;
 	onShowImage: (cb: (dataUrl: string) => void) => void;
+	onShowVideo: (cb: (fileUrl: string) => void) => void;
 	songsGetAll: () => Promise<SongRecord[]>;
 	songsAdd: (song: SongInput) => Promise<SongRecord>;
 	songsUpdate: (id: number, song: SongInput) => Promise<SongRecord | null>;
 	songsDelete: (id: number) => Promise<boolean>;
 	onMenuNewSong: (cb: () => void) => void;
 	onMenuNewSongAI: (cb: () => void) => void;
+	mediaGetAll: () => Promise<MediaRecord[]>;
+	mediaAdd: () => Promise<MediaRecord[]>;
+	mediaDelete: (id: number) => Promise<MediaRecord[]>;
 }
 
 declare global {

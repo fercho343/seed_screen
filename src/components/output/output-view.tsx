@@ -8,7 +8,11 @@ interface LiveSlide {
 	settings: SlideSettings;
 }
 
-type OutputContent = { kind: "slide"; slide: LiveSlide } | { kind: "image"; dataUrl: string } | null;
+type OutputContent =
+	| { kind: "slide"; slide: LiveSlide }
+	| { kind: "image"; dataUrl: string }
+	| { kind: "video"; fileUrl: string }
+	| null;
 
 export function OutputView() {
 	const [content, setContent] = useState<OutputContent>(null);
@@ -17,6 +21,7 @@ export function OutputView() {
 		window.electronAPI.onShowSlide((s) => setContent({ kind: "slide", slide: s }));
 		window.electronAPI.onGoBlack(() => setContent(null));
 		window.electronAPI.onShowImage((dataUrl) => setContent({ kind: "image", dataUrl }));
+		window.electronAPI.onShowVideo((fileUrl) => setContent({ kind: "video", fileUrl }));
 	}, []);
 
 	if (!content) {
@@ -27,6 +32,21 @@ export function OutputView() {
 		return (
 			<div className="flex h-screen w-screen items-center justify-center bg-black">
 				<img src={content.dataUrl} alt="" className="h-full w-full object-contain" />
+			</div>
+		);
+	}
+
+	if (content.kind === "video") {
+		return (
+			<div className="flex h-screen w-screen items-center justify-center bg-black">
+				{/* biome-ignore lint/a11y/useMediaCaption: presentation videos rarely ship captions */}
+				<video
+					key={content.fileUrl}
+					src={content.fileUrl}
+					autoPlay
+					loop
+					className="h-full w-full object-contain"
+				/>
 			</div>
 		);
 	}

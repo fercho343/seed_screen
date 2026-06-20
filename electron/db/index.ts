@@ -3,7 +3,7 @@ import { app } from "electron";
 import Database from "better-sqlite3";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { songs } from "./schema";
+import { media, songs } from "./schema";
 
 export interface SlideRecord {
 	id: string;
@@ -28,6 +28,14 @@ export interface SongInput {
 	slides: SlideRecord[];
 }
 
+export interface MediaRecord {
+	id: number;
+	type: "image" | "video";
+	title: string;
+	filePath: string;
+	createdAt: string;
+}
+
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 
 function getDb() {
@@ -44,6 +52,13 @@ function getDb() {
 			slides TEXT NOT NULL DEFAULT '[]',
 			created_at TEXT NOT NULL DEFAULT (datetime('now')),
 			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+		CREATE TABLE IF NOT EXISTS media (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
 		);
 	`);
 	dbInstance = drizzle(sqlite);
@@ -121,4 +136,33 @@ export function importSongs(incoming: SongInput[]): { added: number; total: numb
 		added++;
 	}
 	return { added, total: incoming?.length ?? 0 };
+}
+
+function parseMedia(row: typeof media.$inferSelect): MediaRecord {
+	return {
+		id: row.id,
+		type: row.type === "video" ? "video" : "image",
+		title: row.title,
+		filePath: row.filePath,
+		createdAt: row.createdAt,
+	};
+}
+
+export function getMedia(): MediaRecord[] {
+	const rows = getDb().select().from(media).orderBy(media.title).all();
+	return rows.map(parseMedia);
+}
+
+export function addMedia(input: { type: "image" | "video"; title: string; filePath: string }): MediaRecord {
+	const row = getDb()
+		.insert(media)
+		.values({ type: input.type, title: input.title.trim(), filePath: input.filePath })
+		.returning()
+		.get();
+	return parseMedia(row);
+}
+
+export function deleteMedia(id: number): MediaRecord | null {
+	const row = getDb().delete(media).where(eq(media.id, id)).returning().get();
+	return row ? parseMedia(row) : null;
 }

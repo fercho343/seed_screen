@@ -117,14 +117,42 @@ export function RemoteApp() {
 				</div>
 
 				<div className="relative">
-					<PreviewCard
-						label={liveItem ? `EN VIVO · ${liveItem.title}`.toUpperCase() : "SIN SEÑAL"}
-						text={state?.liveText ?? undefined}
-						isLive={!!state?.liveText}
-						isEmpty={!state?.liveText}
-						settings={settings}
-						fontScale={0.1}
-					/>
+					{state?.screenMode?.kind === "black" ? (
+						<div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500 bg-black">
+							<span className="absolute top-1.5 left-1.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-white uppercase">
+								● Negro
+							</span>
+						</div>
+					) : state?.screenMode?.kind === "logo" && state.logo ? (
+						<div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500 bg-black">
+							<img src={state.logo} alt="Logo" className="h-full w-full object-contain" />
+							<span className="absolute top-1.5 left-1.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-white uppercase">
+								● Logo
+							</span>
+						</div>
+					) : state?.screenMode?.kind === "image" ? (
+						(() => {
+							const screenMode = state.screenMode;
+							const img = state.images.find((i) => i.id === screenMode.id);
+							return (
+								<div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500 bg-black">
+									{img && <img src={img.dataUrl} alt={img.name} className="h-full w-full object-contain" />}
+									<span className="absolute top-1.5 left-1.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-white uppercase">
+										● {img?.name ?? "Imagen"}
+									</span>
+								</div>
+							);
+						})()
+					) : (
+						<PreviewCard
+							label={liveItem ? `EN VIVO · ${liveItem.title}`.toUpperCase() : "SIN SEÑAL"}
+							text={state?.liveText ?? undefined}
+							isLive={!!state?.liveText}
+							isEmpty={!state?.liveText}
+							settings={settings}
+							fontScale={0.1}
+						/>
+					)}
 					<Button
 						size="sm"
 						variant="destructive"
@@ -133,6 +161,54 @@ export function RemoteApp() {
 					>
 						NEGRO
 					</Button>
+				</div>
+
+				<div className="flex flex-wrap items-center gap-1.5 px-1">
+					<Button
+						size="sm"
+						variant={state?.screenMode?.kind === "black" ? "default" : "outline"}
+						className={cn(
+							"h-7 px-2.5 text-[11px]",
+							state?.screenMode?.kind === "black"
+								? "bg-emerald-600 text-white hover:bg-emerald-600/90"
+								: "bg-card",
+						)}
+						onClick={() => send({ type: "black" })}
+					>
+						Negro
+					</Button>
+					{state?.logo && (
+						<Button
+							size="sm"
+							variant={state?.screenMode?.kind === "logo" ? "default" : "outline"}
+							className={cn(
+								"h-7 px-2.5 text-[11px]",
+								state?.screenMode?.kind === "logo"
+									? "bg-emerald-600 text-white hover:bg-emerald-600/90"
+									: "bg-card",
+							)}
+							onClick={() => send({ type: "showLogo" })}
+						>
+							Logo
+						</Button>
+					)}
+					{state?.images.map((img) => {
+						const active = state.screenMode?.kind === "image" && state.screenMode.id === img.id;
+						return (
+							<button
+								key={img.id}
+								type="button"
+								title={img.name}
+								onClick={() => send({ type: "showImage", id: img.id })}
+								className={cn(
+									"h-7 w-10 shrink-0 overflow-hidden rounded-md border",
+									active ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-border",
+								)}
+							>
+								<img src={img.dataUrl} alt={img.name} className="h-full w-full object-cover" />
+							</button>
+						);
+					})}
 				</div>
 
 				<div className="flex items-center gap-3">

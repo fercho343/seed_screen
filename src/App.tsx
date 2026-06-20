@@ -309,11 +309,16 @@ function App() {
 			else if (cmd.type === "goLive") goLiveById(cmd.itemId, cmd.slideId);
 			else if (cmd.type === "selectItem") selectItemById(cmd.itemId);
 			else if (cmd.type === "toggleOutput") toggleOutput();
+			else if (cmd.type === "showLogo") showLogo();
+			else if (cmd.type === "showImage") {
+				const image = images.find((img) => img.id === cmd.id);
+				if (image) showImage(image);
+			}
 		});
 		return () => {
 			window.ipcRenderer.removeAllListeners("remote:command");
 		};
-	}, [goNext, goPrev, goBlack, goLiveById, selectItemById, toggleOutput]);
+	}, [goNext, goPrev, goBlack, goLiveById, selectItemById, toggleOutput, showLogo, showImage, images]);
 
 	// Keep the remote control web app's snapshot in sync with the live app state.
 	useEffect(() => {
@@ -350,9 +355,24 @@ function App() {
 			liveItemId,
 			liveSlideId,
 			liveText,
+			screenMode,
+			logo,
+			images,
 		};
 		window.electronAPI.remotePushState(state);
-	}, [service, selectedItemId, selectedItem, selectedSlide, liveSlideId, liveText, outputOpen, slideSettings.background]);
+	}, [
+		service,
+		selectedItemId,
+		selectedItem,
+		selectedSlide,
+		liveSlideId,
+		liveText,
+		outputOpen,
+		slideSettings.background,
+		screenMode,
+		logo,
+		images,
+	]);
 
 	return (
 		<div

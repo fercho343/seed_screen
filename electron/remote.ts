@@ -37,6 +37,18 @@ export interface RemoteSlide {
 	text: string;
 }
 
+export interface RemoteImage {
+	id: string;
+	name: string;
+	dataUrl: string;
+}
+
+export type RemoteScreenMode =
+	| { kind: "black" }
+	| { kind: "logo" }
+	| { kind: "image"; id: string }
+	| null;
+
 export interface RemoteState {
 	outputOpen: boolean;
 	background: RemoteBackground;
@@ -47,6 +59,9 @@ export interface RemoteState {
 	liveItemId: string | null;
 	liveSlideId: string | null;
 	liveText: string | null;
+	screenMode: RemoteScreenMode;
+	logo: string | null;
+	images: RemoteImage[];
 }
 
 export type RemoteCommand =
@@ -55,7 +70,9 @@ export type RemoteCommand =
 	| { type: "black" }
 	| { type: "selectItem"; itemId: string }
 	| { type: "goLive"; itemId: string; slideId: string }
-	| { type: "toggleOutput" };
+	| { type: "toggleOutput" }
+	| { type: "showLogo" }
+	| { type: "showImage"; id: string };
 
 const EMPTY_STATE: RemoteState = {
 	outputOpen: false,
@@ -67,6 +84,9 @@ const EMPTY_STATE: RemoteState = {
 	liveItemId: null,
 	liveSlideId: null,
 	liveText: null,
+	screenMode: null,
+	logo: null,
+	images: [],
 };
 
 let server: http.Server | null = null;

@@ -20436,7 +20436,10 @@ const EMPTY_STATE = {
   selectedSlideId: null,
   liveItemId: null,
   liveSlideId: null,
-  liveText: null
+  liveText: null,
+  screenMode: null,
+  logo: null,
+  images: []
 };
 let server = null;
 let state = EMPTY_STATE;

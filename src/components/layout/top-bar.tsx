@@ -138,9 +138,7 @@ export function TopBar({
 	return (
 		<header className="flex h-[52px] shrink-0 items-center gap-2 bg-header px-4 text-header-foreground">
 			<div className="flex items-center gap-2">
-				<div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent-2 text-sm font-extrabold text-white">
-					S
-				</div>
+				<img src="/logo.png" alt="SeedScreen" className="size-7 shrink-0 rounded-lg object-cover" />
 				<span className="text-[15px] font-bold tracking-wide">SeedScreen</span>
 			</div>
 

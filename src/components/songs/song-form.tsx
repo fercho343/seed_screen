@@ -92,6 +92,7 @@ export function SongForm({
 		setPasteText("");
 		setAiLyrics("");
 		setError("");
+		setSaving(false);
 	}, [open, song, initialMode]);
 
 	useEffect(() => {
@@ -219,6 +220,7 @@ export function SongForm({
 				await window.electronAPI.songsAdd(data);
 			}
 			onSaved();
+			setSaving(false);
 		} catch (e) {
 			setError(`Failed to save: ${e instanceof Error ? e.message : String(e)}`);
 			setSaving(false);
@@ -304,15 +306,16 @@ export function SongForm({
 							</div>
 						</div>
 
-						<div className="border-t border-border pt-3">
-							<div className="mb-2 flex flex-col gap-1">
-								{(
-									[
-										["manual", "Build slides"],
-										["paste", "Paste lyrics"],
-										["ai", "Generate with AI"],
-									] as const
-								).map(([m, label]) => (
+						{!isEdit && (
+							<div className="border-t border-border pt-3">
+								<div className="mb-2 flex flex-col gap-1">
+									{(
+										[
+											["manual", "Build slides"],
+											["paste", "Paste lyrics"],
+											["ai", "Generate with AI"],
+										] as const
+									).map(([m, label]) => (
 									<button
 										key={m}
 										type="button"
@@ -346,10 +349,11 @@ export function SongForm({
 										)}
 									</button>
 								))}
+								</div>
 							</div>
-						</div>
+						)}
 
-						{mode === "manual" && (
+						{(isEdit || mode === "manual") && (
 							<div className="flex flex-1 flex-col gap-2 overflow-hidden">
 								<div className="flex items-center justify-between">
 									<span className="text-[11px] font-semibold tracking-wide text-text-3 uppercase">

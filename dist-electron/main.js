@@ -21,8 +21,8 @@ import os from "node:os";
 import "node:events";
 import "node:stream";
 import Client from "better-sqlite3";
-import dgram from "node:dgram";
 import http$1 from "node:http";
+import dgram from "node:dgram";
 const isObject = (value) => {
   const type2 = typeof value;
   return value !== null && (type2 === "object" || type2 === "function");
@@ -20415,6 +20415,139 @@ function importSongs(incoming) {
   }
   return { added, total: (incoming == null ? void 0 : incoming.length) ?? 0 };
 }
+const PORT = 3849;
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".woff2": "font/woff2",
+  ".json": "application/json; charset=utf-8"
+};
+const EMPTY_STATE = {
+  outputOpen: false,
+  background: { type: "color", value: "#000000" },
+  items: [],
+  selectedItemId: null,
+  slides: [],
+  selectedSlideId: null,
+  liveItemId: null,
+  liveSlideId: null,
+  liveText: null
+};
+let server = null;
+let state = EMPTY_STATE;
+let onCommand = null;
+const clients = /* @__PURE__ */ new Set();
+async function serveDev(devServerUrl, reqUrl, res) {
+  const target = devServerUrl.replace(/\/$/, "") + (reqUrl === "/" ? "/remote.html" : reqUrl);
+  try {
+    const upstream = await fetch(target);
+    res.writeHead(upstream.status, {
+      "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream"
+    });
+    res.end(Buffer.from(await upstream.arrayBuffer()));
+  } catch {
+    res.writeHead(502);
+    res.end("Remote dev server unreachable");
+  }
+}
+function serveStatic(distDir, reqUrl, res) {
+  const urlPath = reqUrl === "/" ? "/remote.html" : reqUrl.split("?")[0];
+  const filePath = path.join(distDir, decodeURIComponent(urlPath));
+  if (!filePath.startsWith(distDir)) {
+    res.writeHead(403);
+    res.end();
+    return;
+  }
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.setHeader("Content-Type", MIME[path.extname(filePath)] ?? "application/octet-stream");
+    res.end(data);
+  });
+}
+function localIp$1() {
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const addr of addrs ?? []) {
+      if (addr.family === "IPv4" && !addr.internal) return addr.address;
+    }
+  }
+  return "127.0.0.1";
+}
+function setState(next2) {
+  state = next2;
+  const payload = `data: ${JSON.stringify(state)}
+
+`;
+  for (const res of clients) res.write(payload);
+}
+function isActive() {
+  return server !== null;
+}
+function getUrl() {
+  return `http://${localIp$1()}:${PORT}`;
+}
+function start$1(opts) {
+  if (server) return;
+  onCommand = opts.onCommand;
+  state = EMPTY_STATE;
+  server = http$1.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/api/events") {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": "*"
+      });
+      res.write(`data: ${JSON.stringify(state)}
+
+`);
+      clients.add(res);
+      req.on("close", () => clients.delete(res));
+      return;
+    }
+    if (req.method === "POST" && req.url === "/api/command") {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        try {
+          onCommand == null ? void 0 : onCommand(JSON.parse(body));
+        } catch {
+        }
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.end("{}");
+      });
+      return;
+    }
+    if (req.method === "GET" && req.url) {
+      if (opts.devServerUrl) serveDev(opts.devServerUrl, req.url, res);
+      else serveStatic(opts.distDir, req.url, res);
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.on("error", () => {
+  });
+  server.listen(PORT, "0.0.0.0");
+}
+function stop$1() {
+  for (const res of clients) res.end();
+  clients.clear();
+  server == null ? void 0 : server.close();
+  server = null;
+  onCommand = null;
+  state = EMPTY_STATE;
+}
 const HTTP_PORT = 3847;
 const UDP_PORT = 3848;
 const APP_ID = "seedscreen";
@@ -20772,6 +20905,29 @@ const templateMenu = [
       {
         label: "Show logo",
         accelerator: "L"
+      },
+      { type: "separator" },
+      {
+        label: "Remote Control",
+        type: "checkbox",
+        checked: false,
+        accelerator: "CmdOrCtrl+Shift+R",
+        click: (menuItem) => {
+          if (menuItem.checked) {
+            start$1({
+              devServerUrl: VITE_DEV_SERVER_URL,
+              distDir: RENDERER_DIST,
+              onCommand: (cmd) => win == null ? void 0 : win.webContents.send("remote:command", cmd)
+            });
+            win == null ? void 0 : win.webContents.send("remote:status-changed", {
+              active: true,
+              url: getUrl()
+            });
+          } else {
+            stop$1();
+            win == null ? void 0 : win.webContents.send("remote:status-changed", { active: false, url: null });
+          }
+        }
       }
     ]
   }
@@ -20808,6 +20964,14 @@ ipcMain$1.handle("sync:search-peers", async () => {
 });
 ipcMain$1.handle("sync:fetch-songs", (_event, ip, port) => fetchSongs(ip, port));
 ipcMain$1.handle("sync:import-songs", (_event, incoming) => importSongs(incoming));
+ipcMain$1.handle("remote:get-status", () => ({
+  active: isActive(),
+  url: isActive() ? getUrl() : null
+}));
+ipcMain$1.handle("remote:push-state", (_event, state2) => {
+  setState(state2);
+  return true;
+});
 ipcMain$1.handle("output:toggle", (_event, displayId) => {
   if (outputWin) {
     outputWin.close();
@@ -20888,7 +21052,10 @@ app$1.whenReady().then(() => {
   screen.on("display-removed", () => win == null ? void 0 : win.webContents.send("displays-changed"));
   start((peer) => win == null ? void 0 : win.webContents.send("sync-peer-found", peer));
 });
-app$1.on("before-quit", () => stop());
+app$1.on("before-quit", () => {
+  stop();
+  stop$1();
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

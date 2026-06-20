@@ -9,6 +9,9 @@ interface PreviewCardProps {
 	isLive?: boolean;
 	isEmpty?: boolean;
 	settings: SlideSettings;
+	className?: string;
+	/** Overrides the default 0.18 font-to-card scale ratio (e.g. for tighter thumbnails). */
+	fontScale?: number;
 }
 
 export function PreviewCard({
@@ -18,17 +21,20 @@ export function PreviewCard({
 	isLive = false,
 	isEmpty = true,
 	settings,
+	className,
+	fontScale = 0.18,
 }: PreviewCardProps) {
 	const { background, animated, fontSize, bold, italic, textAlign } = settings;
 	// Scaled down so the preview reflects the real on-screen proportions instead
 	// of rendering at the actual presentation font size inside a tiny card.
-	const previewFontSize = Math.max(8, fontSize * 0.18);
+	const previewFontSize = Math.max(7, fontSize * fontScale);
 
 	return (
 		<div
 			className={cn(
 				"relative aspect-video w-full overflow-hidden rounded-lg border-2",
 				isLive ? "border-emerald-500" : "border-border",
+				className,
 			)}
 		>
 			<MeshBackground background={background} animated={animated} variant="preview" />

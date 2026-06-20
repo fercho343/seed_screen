@@ -87,6 +87,50 @@ export interface LiveSlidePayload {
 	settings: SlideSettingsPayload;
 }
 
+export interface RemoteStatus {
+	active: boolean;
+	url: string | null;
+}
+
+export interface RemoteBackground {
+	type: "color" | "gradient";
+	value: string;
+}
+
+export interface RemoteServiceItem {
+	scheduleId: string;
+	title: string;
+	type: string;
+	slideCount: number;
+	previewText: string;
+}
+
+export interface RemoteSlide {
+	id: string;
+	label: string;
+	text: string;
+}
+
+export interface RemoteState {
+	outputOpen: boolean;
+	background: RemoteBackground;
+	items: RemoteServiceItem[];
+	selectedItemId: string | null;
+	slides: RemoteSlide[];
+	selectedSlideId: string | null;
+	liveItemId: string | null;
+	liveSlideId: string | null;
+	liveText: string | null;
+}
+
+export type RemoteCommand =
+	| { type: "next" }
+	| { type: "prev" }
+	| { type: "black" }
+	| { type: "selectItem"; itemId: string }
+	| { type: "goLive"; itemId: string; slideId: string }
+	| { type: "toggleOutput" };
+
 export interface ElectronAPI {
 	settingsGetAll: () => Promise<{ theme: string; backgrounds: BackgroundItem[] }>;
 	settingsSetTheme: (theme: string) => Promise<boolean>;
@@ -102,6 +146,10 @@ export interface ElectronAPI {
 	syncFetchSongs: (ip: string, port: number) => Promise<SongRecord[]>;
 	syncImportSongs: (songs: SongRecord[]) => Promise<{ added: number; total: number }>;
 	onSyncPeerFound: (cb: (peer: SyncPeer) => void) => void;
+	remoteGetStatus: () => Promise<RemoteStatus>;
+	remotePushState: (state: RemoteState) => Promise<boolean>;
+	onRemoteCommand: (cb: (cmd: RemoteCommand) => void) => void;
+	onRemoteStatusChanged: (cb: (status: RemoteStatus) => void) => void;
 	onOpenSettings: (cb: () => void) => void;
 	bibleGetBooks: () => Promise<BibleBook[]>;
 	bibleGetChapter: (bookId: string, chapterNum: number) => Promise<BibleVerse[]>;

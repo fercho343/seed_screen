@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DisplayInfo, SongRecord } from "../electron/electron-env";
+import type {
+	DisplayInfo,
+	RemoteCommand,
+	RemoteState,
+	RemoteStatus,
+	SongRecord,
+} from "../electron/electron-env";
 import { LeftSidebar } from "@/components/layout/left-sidebar";
 import { PreviewPanel } from "@/components/layout/preview-panel";
 import { ServiceList } from "@/components/layout/service-list";
@@ -32,6 +38,7 @@ function App() {
 	const [songFormTarget, setSongFormTarget] = useState<SongFormTarget>(null);
 	const [translateSong, setTranslateSong] = useState<SongRecord | null>(null);
 	const [slideSettings, setSlideSettings] = useState<SlideSettings>(DEFAULT_SLIDE_SETTINGS);
+	const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>({ active: false, url: null });
 
 	const loadSongs = useCallback(() => {
 		window.electronAPI.songsGetAll().then(setSongs);
@@ -68,6 +75,7 @@ function App() {
 	useEffect(() => {
 		window.electronAPI.settingsGetAll().then(({ theme }) => applyTheme(theme));
 		window.electronAPI.outputGetStatus().then(({ isOpen }) => setOutputOpen(isOpen));
+		window.electronAPI.remoteGetStatus().then(setRemoteStatus);
 		loadSongs();
 		loadDisplays();
 
@@ -79,6 +87,7 @@ function App() {
 		window.electronAPI.onDisplaysChanged(() => loadDisplays());
 		window.electronAPI.onMenuNewSong(() => setSongFormTarget("new"));
 		window.electronAPI.onMenuNewSongAI(() => setSongFormTarget("new-ai"));
+		window.electronAPI.onRemoteStatusChanged(setRemoteStatus);
 
 		return () => {
 			window.ipcRenderer.removeAllListeners("open-settings");
@@ -86,6 +95,7 @@ function App() {
 			window.ipcRenderer.removeAllListeners("displays-changed");
 			window.ipcRenderer.removeAllListeners("menu-new-song");
 			window.ipcRenderer.removeAllListeners("menu-new-song-ai");
+			window.ipcRenderer.removeAllListeners("remote:status-changed");
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [loadSongs, loadDisplays]);
@@ -183,6 +193,50 @@ function App() {
 
 	const selectedItem = service.find((item) => item.scheduleId === selectedItemId);
 
+	const goNext = useCallback(() => {
+		if (!selectedItem) return;
+		const slides = selectedItem.slides;
+		const idx = slides.findIndex((s) => s.id === selectedSlide?.id);
+		const next = slides[idx + 1] ?? slides[0];
+		if (next) {
+			setSelectedSlide(next);
+			sendToLive(selectedItem, next);
+		}
+	}, [selectedItem, selectedSlide, sendToLive]);
+
+	const goPrev = useCallback(() => {
+		if (!selectedItem) return;
+		const slides = selectedItem.slides;
+		const idx = slides.findIndex((s) => s.id === selectedSlide?.id);
+		const prev = slides[idx - 1] ?? slides[slides.length - 1];
+		if (prev) {
+			setSelectedSlide(prev);
+			sendToLive(selectedItem, prev);
+		}
+	}, [selectedItem, selectedSlide, sendToLive]);
+
+	const goLiveById = useCallback(
+		(itemId: string, slideId: string) => {
+			const item = service.find((i) => i.scheduleId === itemId);
+			const slide = item?.slides.find((s) => s.id === slideId);
+			if (item && slide) {
+				setSelectedItemId(item.scheduleId);
+				setSelectedSlide(slide);
+				sendToLive(item, slide);
+			}
+		},
+		[service, sendToLive],
+	);
+
+	const selectItemById = useCallback(
+		(itemId: string) => {
+			const item = service.find((i) => i.scheduleId === itemId);
+			setSelectedItemId(itemId);
+			setSelectedSlide(item?.slides[0] ?? null);
+		},
+		[service],
+	);
+
 	// Arrow keys advance through the selected item's slides and send them live,
 	// matching a typical presenter workflow (click to preview, arrows/double-click to go live).
 	useEffect(() => {
@@ -190,29 +244,68 @@ function App() {
 			if (songFormTarget !== null || settingsOpen) return;
 			const tag = (e.target as HTMLElement)?.tagName;
 			if (tag === "INPUT" || tag === "TEXTAREA") return;
-			if (!selectedItem) return;
-			const slides = selectedItem.slides;
-			const idx = slides.findIndex((s) => s.id === selectedSlide?.id);
-
-			if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-				const next = slides[idx + 1] ?? slides[0];
-				if (next) {
-					setSelectedSlide(next);
-					sendToLive(selectedItem, next);
-				}
-			}
-			if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-				const prev = slides[idx - 1] ?? slides[slides.length - 1];
-				if (prev) {
-					setSelectedSlide(prev);
-					sendToLive(selectedItem, prev);
-				}
-			}
+			if (e.key === "ArrowRight" || e.key === "ArrowDown") goNext();
+			if (e.key === "ArrowLeft" || e.key === "ArrowUp") goPrev();
 			if (e.key === "b" || e.key === "B") goBlack();
 		};
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
-	}, [selectedItem, selectedSlide, sendToLive, goBlack, songFormTarget, settingsOpen]);
+	}, [goNext, goPrev, goBlack, songFormTarget, settingsOpen]);
+
+	// Remote control commands (from the LAN web remote) drive the same actions
+	// as the keyboard shortcuts and direct slide clicks.
+	useEffect(() => {
+		window.electronAPI.onRemoteCommand((cmd: RemoteCommand) => {
+			if (cmd.type === "next") goNext();
+			else if (cmd.type === "prev") goPrev();
+			else if (cmd.type === "black") goBlack();
+			else if (cmd.type === "goLive") goLiveById(cmd.itemId, cmd.slideId);
+			else if (cmd.type === "selectItem") selectItemById(cmd.itemId);
+			else if (cmd.type === "toggleOutput") toggleOutput();
+		});
+		return () => {
+			window.ipcRenderer.removeAllListeners("remote:command");
+		};
+	}, [goNext, goPrev, goBlack, goLiveById, selectItemById, toggleOutput]);
+
+	// Keep the remote control web app's snapshot in sync with the live app state.
+	useEffect(() => {
+		const liveItemId = liveSlideId
+			? service.find((i) => i.slides.some((s) => s.id === liveSlideId))?.scheduleId ?? null
+			: null;
+		const state: RemoteState = {
+			outputOpen,
+			background: { type: slideSettings.background.type, value: slideSettings.background.value },
+			items: service.map((item) => {
+				const itemText = (s: ServiceSlide) =>
+					getSlideDisplayText(s, item.displayLanguage, item.slideLanguageOverrides);
+				let previewText = item.slides[0] ? itemText(item.slides[0]) : "";
+				if (item.scheduleId === liveItemId) {
+					const idx = item.slides.findIndex((s) => s.id === liveSlideId);
+					const next = item.slides[idx + 1];
+					previewText = next ? itemText(next) : (liveText ?? previewText);
+				}
+				return {
+					scheduleId: item.scheduleId,
+					title: item.title,
+					type: item.type,
+					slideCount: item.slides.length,
+					previewText,
+				};
+			}),
+			selectedItemId,
+			slides: (selectedItem?.slides ?? []).map((s) => ({
+				id: s.id,
+				label: s.label,
+				text: getSlideDisplayText(s, selectedItem?.displayLanguage, selectedItem?.slideLanguageOverrides),
+			})),
+			selectedSlideId: selectedSlide?.id ?? null,
+			liveItemId,
+			liveSlideId,
+			liveText,
+		};
+		window.electronAPI.remotePushState(state);
+	}, [service, selectedItemId, selectedItem, selectedSlide, liveSlideId, liveText, outputOpen, slideSettings.background]);
 
 	return (
 		<div
@@ -227,6 +320,7 @@ function App() {
 				onSelectDisplay={setSelectedDisplay}
 				slideSettings={slideSettings}
 				onSlideSettingsChange={setSlideSettings}
+				remoteStatus={remoteStatus}
 			/>
 			<div className="flex flex-1 gap-0.5 overflow-hidden bg-background p-0.5">
 				<LeftSidebar

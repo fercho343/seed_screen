@@ -1,5 +1,5 @@
-import { AlignCenter, AlignLeft, Bold, Italic, Monitor } from "lucide-react";
-import type { DisplayInfo } from "../../../electron/electron-env";
+import { AlignCenter, AlignLeft, Bold, Italic, Monitor, Smartphone } from "lucide-react";
+import type { DisplayInfo, RemoteStatus } from "../../../electron/electron-env";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -74,6 +74,7 @@ interface TopBarProps {
 	onSelectDisplay: (id: number) => void;
 	slideSettings: SlideSettings;
 	onSlideSettingsChange: (updater: (s: SlideSettings) => SlideSettings) => void;
+	remoteStatus?: RemoteStatus;
 }
 
 export function TopBar({
@@ -84,6 +85,7 @@ export function TopBar({
 	onSelectDisplay,
 	slideSettings,
 	onSlideSettingsChange,
+	remoteStatus,
 }: TopBarProps) {
 	const activeStyles = [
 		...(slideSettings.bold ? ["bold"] : []),
@@ -214,6 +216,19 @@ export function TopBar({
 								))}
 							</SelectContent>
 						</Select>
+					</>
+				)}
+
+				{remoteStatus?.active && remoteStatus.url && (
+					<>
+						<Separator orientation="vertical" className="h-7" />
+						<div
+							className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1.5 text-[11px] text-emerald-400"
+							title="Remote control activo (Presentation > Remote Control para desactivar)"
+						>
+							<Smartphone className="size-3.5" />
+							<span className="font-mono">{remoteStatus.url.replace("http://", "")}</span>
+						</div>
 					</>
 				)}
 

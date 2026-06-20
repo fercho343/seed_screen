@@ -13,6 +13,8 @@ import {
 import Store from "electron-store";
 import { addSong, deleteSong, getSongs, importSongs, type SongInput, updateSong } from "./db";
 import type { BackgroundItem } from "./electron-env";
+import * as remote from "./remote";
+import type { RemoteState } from "./remote";
 import * as sync from "./sync";
 
 interface StoreSchema {
@@ -265,6 +267,29 @@ const templateMenu: MenuItemConstructorOptions[] = [
 				label: "Show logo",
 				accelerator: "L",
 			},
+			{ type: "separator" as const },
+			{
+				label: "Remote Control",
+				type: "checkbox" as const,
+				checked: false,
+				accelerator: "CmdOrCtrl+Shift+R",
+				click: (menuItem) => {
+					if (menuItem.checked) {
+						remote.start({
+							devServerUrl: VITE_DEV_SERVER_URL,
+							distDir: RENDERER_DIST,
+							onCommand: (cmd) => win?.webContents.send("remote:command", cmd),
+						});
+						win?.webContents.send("remote:status-changed", {
+							active: true,
+							url: remote.getUrl(),
+						});
+					} else {
+						remote.stop();
+						win?.webContents.send("remote:status-changed", { active: false, url: null });
+					}
+				},
+			},
 		],
 	},
 ];
@@ -310,6 +335,16 @@ ipcMain.handle("sync:search-peers", async () => {
 ipcMain.handle("sync:fetch-songs", (_event, ip: string, port: number) => sync.fetchSongs(ip, port));
 
 ipcMain.handle("sync:import-songs", (_event, incoming: SongInput[]) => importSongs(incoming));
+
+ipcMain.handle("remote:get-status", () => ({
+	active: remote.isActive(),
+	url: remote.isActive() ? remote.getUrl() : null,
+}));
+
+ipcMain.handle("remote:push-state", (_event, state: RemoteState) => {
+	remote.setState(state);
+	return true;
+});
 
 ipcMain.handle("output:toggle", (_event, displayId?: number) => {
 	if (outputWin) {
@@ -421,4 +456,7 @@ app.whenReady().then(() => {
 	sync.start((peer) => win?.webContents.send("sync-peer-found", peer));
 });
 
-app.on("before-quit", () => sync.stop());
+app.on("before-quit", () => {
+	sync.stop();
+	remote.stop();
+});

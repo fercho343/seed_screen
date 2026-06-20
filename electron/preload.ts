@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	syncImportSongs: (songs: unknown[]) => ipcRenderer.invoke("sync:import-songs", songs),
 	onSyncPeerFound: (cb: (peer: unknown) => void) =>
 		ipcRenderer.on("sync-peer-found", (_event, peer) => cb(peer)),
+	remoteGetStatus: () => ipcRenderer.invoke("remote:get-status"),
+	remotePushState: (state: unknown) => ipcRenderer.invoke("remote:push-state", state),
+	onRemoteCommand: (cb: (cmd: unknown) => void) =>
+		ipcRenderer.on("remote:command", (_event, cmd) => cb(cmd)),
+	onRemoteStatusChanged: (cb: (status: { active: boolean; url: string | null }) => void) =>
+		ipcRenderer.on("remote:status-changed", (_event, status) => cb(status)),
 	onOpenSettings: (cb: () => void) => ipcRenderer.on("open-settings", () => cb()),
 	bibleGetBooks: () => ipcRenderer.invoke("bible:get-books"),
 	bibleGetChapter: (bookId: string, chapterNum: number) =>

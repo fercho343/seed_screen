@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Loader2, Search, Sparkles, X } from "lucide-rea
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SongInput, SongRecord } from "../../../electron/electron-env";
 import { PreviewCard } from "@/components/preview/preview-card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -290,18 +291,16 @@ export function SongForm({
 										))}
 									</SelectContent>
 								</Select>
-								{ollamaOk && (
-									<Button
-										variant="outline"
-										size="icon-sm"
-										disabled={detecting}
-										title="Detect language with AI"
-										onClick={() => detectLanguage()}
-										className="shrink-0 bg-input text-primary"
-									>
-										<Sparkles className="size-3.5" />
-									</Button>
-								)}
+								<Button
+									variant="outline"
+									size="icon-sm"
+									disabled={detecting || !ollamaOk}
+									title={ollamaOk ? "Detect language with AI" : "Ollama is not available"}
+									onClick={() => detectLanguage()}
+									className="shrink-0 bg-input text-primary"
+								>
+									<Sparkles className="size-3.5" />
+								</Button>
 							</div>
 						</div>
 
@@ -319,13 +318,32 @@ export function SongForm({
 										type="button"
 										onClick={() => setMode(m)}
 										className={cn(
-											"rounded-md px-2 py-1.5 text-left text-[11px] font-medium transition-colors",
+											"flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[11px] font-medium transition-colors",
 											mode === m
 												? "bg-primary text-primary-foreground"
 												: "bg-input text-text-3 hover:text-foreground",
 										)}
 									>
 										{label}
+										{m === "ai" && ollamaOk !== null && (
+											<Badge
+												variant="outline"
+												className={cn(
+													"h-4 gap-1 px-1.5 text-[9px]",
+													ollamaOk
+														? "border-emerald-700 text-emerald-400"
+														: "border-red-900 text-red-400",
+												)}
+											>
+												<span
+													className={cn(
+														"size-1.5 rounded-full",
+														ollamaOk ? "bg-emerald-400" : "bg-red-400",
+													)}
+												/>
+												{ollamaOk ? "Ollama" : "Sin Ollama"}
+											</Badge>
+										)}
 									</button>
 								))}
 							</div>
@@ -505,30 +523,30 @@ export function SongForm({
 
 						{mode === "ai" && (
 							<>
-								{ollamaOk && (
-									<div className="flex items-center gap-3 rounded-lg border border-primary bg-primary/10 px-3.5 py-2.5">
-										<span className="flex-1 text-xs text-foreground">
-											{searching
+								<div className="flex items-center gap-3 rounded-lg border border-primary bg-primary/10 px-3.5 py-2.5">
+									<span className="flex-1 text-xs text-foreground">
+										{!ollamaOk
+											? "Ollama is not available"
+											: searching
 												? "Searching for lyrics..."
 												: title.trim()
 													? `Search lyrics for "${title.trim()}"${author.trim() ? ` — ${author.trim()}` : ""} with AI`
 													: "Write the title to search the lyrics automatically"}
-										</span>
-										<Button
-											size="sm"
-											disabled={searching || !title.trim() || !model}
-											onClick={searchLyrics}
-											className="gap-1.5 bg-gradient-to-br from-accent-2 to-primary"
-										>
-											{searching ? (
-												<Loader2 className="size-3.5 animate-spin" />
-											) : (
-												<Search className="size-3.5" />
-											)}
-											{searching ? "Searching..." : "Search lyrics with AI"}
-										</Button>
-									</div>
-								)}
+									</span>
+									<Button
+										size="sm"
+										disabled={searching || !title.trim() || !model || !ollamaOk}
+										onClick={searchLyrics}
+										className="gap-1.5 bg-gradient-to-br from-accent-2 to-primary"
+									>
+										{searching ? (
+											<Loader2 className="size-3.5 animate-spin" />
+										) : (
+											<Search className="size-3.5" />
+										)}
+										{searching ? "Searching..." : "Search lyrics with AI"}
+									</Button>
+								</div>
 
 								<div className="flex items-center justify-between">
 									<span className="text-[11px] font-semibold tracking-wide text-text-3 uppercase">

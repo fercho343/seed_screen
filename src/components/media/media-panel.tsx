@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import type { MediaRecord } from "../../../electron/electron-env";
 import { Button } from "@/components/ui/button";
 import type { ServiceItem } from "@/lib/service-types";
-import { toFileUrl } from "@/lib/file-url";
 import { cn } from "@/lib/utils";
 
 interface MediaPanelProps {
@@ -37,12 +36,11 @@ export function MediaPanel({ service, onAddToService }: MediaPanelProps) {
 	};
 
 	const addToService = (item: MediaRecord) => {
-		const url = toFileUrl(item.filePath);
 		onAddToService({
 			sourceId: String(item.id),
 			type: item.type,
 			title: item.title,
-			slides: [{ id: crypto.randomUUID(), label: item.title, text: item.title, mediaUrl: url }],
+			slides: [{ id: crypto.randomUUID(), label: item.title, text: item.title, mediaUrl: item.url }],
 		});
 	};
 
@@ -81,11 +79,7 @@ export function MediaPanel({ service, onAddToService }: MediaPanelProps) {
 							>
 								<div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-card">
 									{item.type === "image" ? (
-										<img
-											src={toFileUrl(item.filePath)}
-											alt={item.title}
-											className="h-full w-full object-cover"
-										/>
+										<img src={item.url} alt={item.title} className="h-full w-full object-cover" />
 									) : (
 										<Clapperboard className="size-4 text-text-3" />
 									)}

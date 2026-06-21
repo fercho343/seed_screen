@@ -78,6 +78,8 @@ export interface MediaRecord {
 	type: "image" | "video";
 	title: string;
 	filePath: string;
+	/** `media:///<filename>` URL the renderer can load directly in <img>/<video> src. */
+	url: string;
 	createdAt: string;
 }
 

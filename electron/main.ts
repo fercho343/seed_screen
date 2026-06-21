@@ -8,6 +8,7 @@ import {
 	dialog,
 	ipcMain,
 	Menu,
+	protocol,
 	screen,
 	type MenuItemConstructorOptions,
 } from "electron";
@@ -68,10 +69,43 @@ function pickImageAsDataUrl(): { name: string; dataUrl: string } | null {
 const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "m4v"];
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
 
+const MEDIA_MIME: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+	".mp4": "video/mp4",
+	".webm": "video/webm",
+	".mov": "video/quicktime",
+	".m4v": "video/x-m4v",
+};
+
 function mediaDir(): string {
 	const dir = path.join(app.getPath("userData"), "media");
 	fs.mkdirSync(dir, { recursive: true });
 	return dir;
+}
+
+// Renderer windows load over http://localhost (dev) or file:// (prod), and Chromium blocks
+// <img>/<video> from a non-file origin reading arbitrary file:// paths. A privileged custom
+// scheme sidesteps that — it behaves like a normal fetchable origin regardless of how the
+// page itself was loaded.
+protocol.registerSchemesAsPrivileged([
+	{
+		scheme: "media",
+		privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+	},
+]);
+
+/**
+ * Maps a stored media file path to a `media://file/<name>` URL.
+ * The explicit "file" host matters: for a registered standard scheme, `media:///<name>`
+ * would parse the filename into the host slot, so we pin a constant host and keep the
+ * real filename in the path where the handler reads it back.
+ */
+function mediaUrlFor(filePath: string): string {
+	return `media://file/${encodeURIComponent(path.basename(filePath))}`;
 }
 
 /** Opens a native file picker for images/videos, copies the pick into the app's media folder, and adds it to the DB. */
@@ -494,11 +528,15 @@ ipcMain.handle("songs:update", (_event, id: number, input: SongInput) => updateS
 
 ipcMain.handle("songs:delete", (_event, id: number) => deleteSong(id));
 
-ipcMain.handle("media:get-all", () => getMedia());
+function withUrl<T extends { filePath: string }>(rows: T[]) {
+	return rows.map((row) => ({ ...row, url: mediaUrlFor(row.filePath) }));
+}
+
+ipcMain.handle("media:get-all", () => withUrl(getMedia()));
 
 ipcMain.handle("media:add", () => {
 	pickAndAddMedia();
-	return getMedia();
+	return withUrl(getMedia());
 });
 
 ipcMain.handle("media:delete", (_event, id: number) => {
@@ -506,7 +544,7 @@ ipcMain.handle("media:delete", (_event, id: number) => {
 	if (removed) {
 		fs.rm(removed.filePath, { force: true }, () => {});
 	}
-	return getMedia();
+	return withUrl(getMedia());
 });
 
 ipcMain.handle("bible:get-books", () => {
@@ -566,6 +604,26 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
+	protocol.handle("media", async (request) => {
+		// URLs are media://file/<name> — the filename lives in the path, host is a constant.
+		const url = new URL(request.url);
+		const name = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+		const filePath = path.join(mediaDir(), name);
+		// Guard against the resolved path escaping the media directory (e.g. via "..").
+		if (!filePath.startsWith(mediaDir())) {
+			return new Response("Forbidden", { status: 403 });
+		}
+		try {
+			const data = await fs.promises.readFile(filePath);
+			return new Response(data, {
+				headers: { "Content-Type": MEDIA_MIME[path.extname(filePath).toLowerCase()] ?? "application/octet-stream" },
+			});
+		} catch {
+			console.error(`[media] file not found: ${filePath}`);
+			return new Response("Not found", { status: 404 });
+		}
+	});
+
 	createWindow();
 
 	// Construir el menú desde la plantilla

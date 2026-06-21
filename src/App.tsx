@@ -35,7 +35,10 @@ function App() {
 	const [liveSlideId, setLiveSlideId] = useState<string | null>(null);
 	const [liveText, setLiveText] = useState<string | null>(null);
 	const [liveTitle, setLiveTitle] = useState<string | undefined>(undefined);
-	const [liveMedia, setLiveMedia] = useState<{ url: string; type: "image" | "video" } | null>(null);
+	const [liveMedia, setLiveMedia] = useState<{
+		url: string;
+		type: "image" | "video" | "youtube";
+	} | null>(null);
 	const [outputOpen, setOutputOpen] = useState(false);
 	const [displays, setDisplays] = useState<DisplayInfo[]>([]);
 	const [selectedDisplay, setSelectedDisplay] = useState<number | null>(null);
@@ -196,6 +199,13 @@ function App() {
 			if (!outputOpen) return;
 			setScreenMode(null);
 			setLiveSlideId(slide.id);
+			if (item.type === "youtube" && slide.youtubeId) {
+				await window.electronAPI.outputShowYoutube(slide.youtubeId);
+				setLiveMedia({ url: slide.youtubeId, type: "youtube" });
+				setLiveText(null);
+				setLiveTitle(undefined);
+				return;
+			}
 			if (slide.mediaUrl && (item.type === "image" || item.type === "video")) {
 				if (item.type === "image") await window.electronAPI.outputShowImage(slide.mediaUrl);
 				else await window.electronAPI.outputShowVideo(slide.mediaUrl);
@@ -433,7 +443,7 @@ function App() {
 					liveTitle={liveTitle}
 					liveMedia={liveMedia}
 					nextText={
-						selectedItem && selectedSlide && !selectedSlide.mediaUrl
+						selectedItem && selectedSlide && !selectedSlide.mediaUrl && !selectedSlide.youtubeId
 							? getSlideDisplayText(
 									selectedSlide,
 									selectedItem.displayLanguage,
@@ -445,7 +455,9 @@ function App() {
 					nextMedia={
 						selectedSlide?.mediaUrl && (selectedItem?.type === "image" || selectedItem?.type === "video")
 							? { url: selectedSlide.mediaUrl, type: selectedItem.type }
-							: null
+							: selectedSlide?.youtubeId && selectedItem?.type === "youtube"
+								? { url: selectedSlide.youtubeId, type: "youtube" as const }
+								: null
 					}
 					canProject={!!selectedSlide}
 					settings={slideSettings}

@@ -12,6 +12,7 @@ type OutputContent =
 	| { kind: "slide"; slide: LiveSlide }
 	| { kind: "image"; dataUrl: string }
 	| { kind: "video"; fileUrl: string }
+	| { kind: "youtube"; videoId: string }
 	| null;
 
 export function OutputView() {
@@ -22,10 +23,27 @@ export function OutputView() {
 		window.electronAPI.onGoBlack(() => setContent(null));
 		window.electronAPI.onShowImage((dataUrl) => setContent({ kind: "image", dataUrl }));
 		window.electronAPI.onShowVideo((fileUrl) => setContent({ kind: "video", fileUrl }));
+		window.electronAPI.onShowYoutube((videoId) => setContent({ kind: "youtube", videoId }));
 	}, []);
 
 	if (!content) {
 		return <div className="h-screen w-screen bg-black" />;
+	}
+
+	if (content.kind === "youtube") {
+		const src = `https://www.youtube-nocookie.com/embed/${content.videoId}?autoplay=1&controls=0&modestbranding=1&rel=0&playsinline=1`;
+		return (
+			<div className="flex h-screen w-screen items-center justify-center bg-black">
+				<iframe
+					key={content.videoId}
+					src={src}
+					title="YouTube"
+					allow="autoplay; encrypted-media; fullscreen"
+					allowFullScreen
+					className="h-full w-full border-0"
+				/>
+			</div>
+		);
 	}
 
 	if (content.kind === "image") {

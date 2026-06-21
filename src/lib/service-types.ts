@@ -8,12 +8,14 @@ export interface ServiceSlide {
 	translations?: Record<string, string>;
 	/** For "image"/"video" items: the `file://` URL of the media asset. */
 	mediaUrl?: string;
+	/** For "youtube" items: the 11-char YouTube video id. */
+	youtubeId?: string;
 }
 
 export interface ServiceItem {
 	scheduleId: string;
 	sourceId: string;
-	type: "song" | "bible" | "image" | "video";
+	type: "song" | "bible" | "image" | "video" | "youtube";
 	title: string;
 	subtitle?: string;
 	slides: ServiceSlide[];

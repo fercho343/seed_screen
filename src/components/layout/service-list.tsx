@@ -1,4 +1,13 @@
-import { BookOpen, Clapperboard, Clipboard, Image, Languages, Music, X } from "lucide-react";
+import {
+	BookOpen,
+	Clapperboard,
+	Clipboard,
+	Image,
+	Languages,
+	Music,
+	SquarePlay,
+	X,
+} from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -178,6 +187,8 @@ export function ServiceList({
 								<Image className="size-3.5 shrink-0 text-text-3" />
 							) : item.type === "video" ? (
 								<Clapperboard className="size-3.5 shrink-0 text-text-3" />
+							) : item.type === "youtube" ? (
+								<SquarePlay className="size-3.5 shrink-0 text-red-500" />
 							) : (
 								<Music className="size-3.5 shrink-0 text-text-3" />
 							)}

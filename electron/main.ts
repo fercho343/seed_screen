@@ -286,21 +286,33 @@ const templateMenu: MenuItemConstructorOptions[] = [
 	// Usamos el operador spread (...) para insertarlo solo si es Mac.
 	...(isMac
 		? [
+			{
+				label: app.name,
+				submenu: [
+					{
+						label: "Settings",
+						accelerator: "CmdOrCtrl+,",
+						click: () => win?.webContents.send("open-settings"),
+					},
+					{ label: "About", accelerator: "CmdOrCtrl+D" },
+					{ type: "separator" as const },
+					{ role: "quit" as const, label: "Quit" },
+				],
+			},
+		]
+		: [{
+			label: "SeedScreen", submenu: [
 				{
-					label: app.name,
-					submenu: [
-						{
-							label: "Settings",
-							accelerator: "CmdOrCtrl+,",
-							click: () => win?.webContents.send("open-settings"),
-						},
-						{ label: "About", accelerator: "CmdOrCtrl+D" },
-						{ type: "separator" as const },
-						{ role: "quit" as const, label: "Quit" },
-					],
+					label: "Settings",
+					accelerator: "CmdOrCtrl+,",
+					click: () => win?.webContents.send("open-settings"),
 				},
-			]
-		: []),
+				{ label: "About", accelerator: "CmdOrCtrl+D" },
+				{ type: "separator" as const },
+				{ role: "quit" as const, label: "Quit" },
+			],
+		}]),
+
 
 	{
 		label: "Edit",
@@ -520,6 +532,11 @@ ipcMain.handle("output:show-video", (_event, fileUrl: string) => {
 	return true;
 });
 
+ipcMain.handle("output:show-youtube", (_event, videoId: string) => {
+	outputWin?.webContents.send("show-youtube", videoId);
+	return true;
+});
+
 ipcMain.handle("songs:get-all", () => getSongs());
 
 ipcMain.handle("songs:add", (_event, input: SongInput) => addSong(input));
@@ -542,7 +559,7 @@ ipcMain.handle("media:add", () => {
 ipcMain.handle("media:delete", (_event, id: number) => {
 	const removed = deleteMedia(id);
 	if (removed) {
-		fs.rm(removed.filePath, { force: true }, () => {});
+		fs.rm(removed.filePath, { force: true }, () => { });
 	}
 	return withUrl(getMedia());
 });

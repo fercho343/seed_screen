@@ -3,9 +3,10 @@ import { PreviewCard } from "@/components/preview/preview-card";
 import { Button } from "@/components/ui/button";
 import type { SlideSettings } from "@/lib/slide-settings";
 import { cn } from "@/lib/utils";
+import { youtubeThumbnail } from "@/lib/youtube";
 
 type ScreenMode = { kind: "black" } | { kind: "logo" } | { kind: "image"; id: string } | null;
-type LiveMedia = { url: string; type: "image" | "video" } | null;
+type LiveMedia = { url: string; type: "image" | "video" | "youtube" } | null;
 
 interface PreviewPanelProps {
 	outputOpen: boolean;
@@ -31,6 +32,8 @@ function MediaThumb({ media, label }: { media: NonNullable<LiveMedia>; label: st
 		<div className="relative aspect-video w-full overflow-hidden rounded-lg border-2 border-border bg-black">
 			{media.type === "image" ? (
 				<img src={media.url} alt="" className="h-full w-full object-contain" />
+			) : media.type === "youtube" ? (
+				<img src={youtubeThumbnail(media.url)} alt="" className="h-full w-full object-cover" />
 			) : (
 				<video src={media.url} muted className="h-full w-full object-contain" />
 			)}

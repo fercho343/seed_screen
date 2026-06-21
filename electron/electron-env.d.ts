@@ -203,6 +203,7 @@ export interface ElectronAPI {
 	outputGoBlack: () => Promise<boolean>;
 	outputShowImage: (dataUrl: string) => Promise<boolean>;
 	outputShowVideo: (fileUrl: string) => Promise<boolean>;
+	outputShowYoutube: (videoId: string) => Promise<boolean>;
 	getDisplays: () => Promise<DisplayInfo[]>;
 	onDisplaysChanged: (cb: () => void) => void;
 	onOutputClosed: (cb: () => void) => void;
@@ -213,6 +214,7 @@ export interface ElectronAPI {
 	onGoBlack: (cb: () => void) => void;
 	onShowImage: (cb: (dataUrl: string) => void) => void;
 	onShowVideo: (cb: (fileUrl: string) => void) => void;
+	onShowYoutube: (cb: (videoId: string) => void) => void;
 	songsGetAll: () => Promise<SongRecord[]>;
 	songsAdd: (song: SongInput) => Promise<SongRecord>;
 	songsUpdate: (id: number, song: SongInput) => Promise<SongRecord | null>;

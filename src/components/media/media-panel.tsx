@@ -1,9 +1,11 @@
-import { Clapperboard, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
+import { Clapperboard, Image as ImageIcon, Plus, SquarePlay, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { MediaRecord } from "../../../electron/electron-env";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { ServiceItem } from "@/lib/service-types";
 import { cn } from "@/lib/utils";
+import { parseYouTubeId } from "@/lib/youtube";
 
 interface MediaPanelProps {
 	service: ServiceItem[];
@@ -13,6 +15,23 @@ interface MediaPanelProps {
 export function MediaPanel({ service, onAddToService }: MediaPanelProps) {
 	const [media, setMedia] = useState<MediaRecord[]>([]);
 	const [busy, setBusy] = useState(false);
+	const [youtubeUrl, setYoutubeUrl] = useState("");
+	const youtubeId = parseYouTubeId(youtubeUrl);
+	const youtubeError = youtubeUrl.trim().length > 0 && !youtubeId;
+
+	const addYoutube = () => {
+		if (!youtubeId) return;
+		onAddToService({
+			sourceId: youtubeId,
+			type: "youtube",
+			title: "YouTube video",
+			subtitle: "YouTube",
+			slides: [
+				{ id: crypto.randomUUID(), label: "YouTube", text: "YouTube video", youtubeId },
+			],
+		});
+		setYoutubeUrl("");
+	};
 
 	useEffect(() => {
 		window.electronAPI.mediaGetAll().then(setMedia);
@@ -62,7 +81,34 @@ export function MediaPanel({ service, onAddToService }: MediaPanelProps) {
 				</Button>
 			</div>
 
-			<div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2.5 pb-2.5">
+			<div className="flex flex-col gap-1.5 border-b border-border px-2.5 pb-2.5">
+				<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-3">
+					<SquarePlay className="size-3.5 text-red-500" />
+					YouTube
+				</div>
+				<div className="flex items-center gap-1.5">
+					<Input
+						value={youtubeUrl}
+						onChange={(e) => setYoutubeUrl(e.target.value)}
+						onKeyDown={(e) => e.key === "Enter" && addYoutube()}
+						placeholder="Pega un enlace de YouTube..."
+						className="h-8 border-border bg-input text-xs"
+					/>
+					<Button
+						size="sm"
+						disabled={!youtubeId}
+						onClick={addYoutube}
+						className="shrink-0"
+					>
+						+ Add
+					</Button>
+				</div>
+				{youtubeError && (
+					<span className="text-[10px] text-red-400">Enlace de YouTube no válido</span>
+				)}
+			</div>
+
+			<div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2.5 py-2.5">
 				{media.length === 0 ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-1 px-4 py-8 text-center">
 						<ImageIcon className="size-7 text-text-4" />

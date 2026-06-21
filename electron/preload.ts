@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	outputGoBlack: () => ipcRenderer.invoke("output:go-black"),
 	outputShowImage: (dataUrl: string) => ipcRenderer.invoke("output:show-image", dataUrl),
 	outputShowVideo: (fileUrl: string) => ipcRenderer.invoke("output:show-video", fileUrl),
+	outputShowYoutube: (videoId: string) => ipcRenderer.invoke("output:show-youtube", videoId),
 	onOutputClosed: (cb: () => void) => ipcRenderer.on("output-window-closed", () => cb()),
 	onMenuToggleOutput: (cb: () => void) => ipcRenderer.on("menu-toggle-output", () => cb()),
 	onMenuGoBlack: (cb: () => void) => ipcRenderer.on("menu-go-black", () => cb()),
@@ -77,6 +78,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("show-image", (_event, dataUrl) => cb(dataUrl)),
 	onShowVideo: (cb: (fileUrl: string) => void) =>
 		ipcRenderer.on("show-video", (_event, fileUrl) => cb(fileUrl)),
+	onShowYoutube: (cb: (videoId: string) => void) =>
+		ipcRenderer.on("show-youtube", (_event, videoId) => cb(videoId)),
 	songsGetAll: () => ipcRenderer.invoke("songs:get-all"),
 	songsAdd: (song: SongInput) => ipcRenderer.invoke("songs:add", song),
 	songsUpdate: (id: number, song: SongInput) => ipcRenderer.invoke("songs:update", id, song),

@@ -2,6 +2,7 @@ import dgram from "node:dgram";
 import http from "node:http";
 import os from "node:os";
 import { getSongs } from "./db";
+import { broadcastAddresses, localIp } from "./net-util";
 
 const HTTP_PORT = 3847;
 const UDP_PORT = 3848;
@@ -20,30 +21,29 @@ let httpServer: http.Server | null = null;
 let udpSocket: dgram.Socket | null = null;
 let announceTimer: NodeJS.Timeout | null = null;
 
-function localIp(): string {
-	for (const addrs of Object.values(os.networkInterfaces())) {
-		for (const addr of addrs ?? []) {
-			if (addr.family === "IPv4" && !addr.internal) return addr.address;
-		}
-	}
-	return "127.0.0.1";
-}
-
-function announce() {
-	if (!udpSocket) return;
-	const msg = Buffer.from(
+function packet(type: "hello" | "hello-reply"): Buffer {
+	return Buffer.from(
 		JSON.stringify({
 			app: APP_ID,
-			type: "hello",
+			type,
 			hostname: os.hostname(),
 			port: HTTP_PORT,
 			songCount: getSongs().length,
 		}),
 	);
-	try {
-		udpSocket.send(msg, 0, msg.length, UDP_PORT, "255.255.255.255");
-	} catch {
-		// broadcast may fail transiently; next interval retries
+}
+
+function announce() {
+	if (!udpSocket) return;
+	const msg = packet("hello");
+	// Send to the limited broadcast AND each interface's directed broadcast, so the
+	// announce actually leaves the real LAN adapter on multi-homed hosts (Windows).
+	for (const target of broadcastAddresses()) {
+		try {
+			udpSocket.send(msg, 0, msg.length, UDP_PORT, target);
+		} catch {
+			// some targets may be unreachable on a given host; others still go out
+		}
 	}
 }
 
@@ -66,14 +66,18 @@ export function start(onPeer?: (peer: Peer) => void) {
 	}
 
 	if (!udpSocket) {
-		const self = localIp();
+		const selfHost = os.hostname();
 		udpSocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
 		udpSocket.on("error", () => {});
 		udpSocket.on("message", (raw, rinfo) => {
-			if (rinfo.address === self) return;
 			try {
 				const data = JSON.parse(raw.toString());
-				if (data.app !== APP_ID || data.type !== "hello") return;
+				if (data.app !== APP_ID) return;
+				if (data.type !== "hello" && data.type !== "hello-reply") return;
+				// Ignore our own broadcast (it can come back on another interface with a
+				// different source IP, so match on hostname rather than address).
+				if (data.hostname && data.hostname === selfHost) return;
+
 				const peer: Peer = {
 					ip: rinfo.address,
 					hostname: data.hostname || rinfo.address,
@@ -83,6 +87,18 @@ export function start(onPeer?: (peer: Peer) => void) {
 				};
 				peers.set(rinfo.address, peer);
 				onPeer?.(peer);
+
+				// Answer a "hello" directly (unicast) so discovery converges even when one
+				// side's broadcast can't reach the other (common with Windows + virtual NICs).
+				// "hello-reply" is NOT answered, which prevents an endless ping-pong.
+				if (data.type === "hello" && udpSocket) {
+					const reply = packet("hello-reply");
+					try {
+						udpSocket.send(reply, 0, reply.length, rinfo.port || UDP_PORT, rinfo.address);
+					} catch {
+						// ignore unicast failures
+					}
+				}
 			} catch {
 				// ignore malformed packets
 			}

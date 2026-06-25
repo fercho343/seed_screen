@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
+import { localIp } from "./net-util";
 
 const PORT = 3849;
 
@@ -133,15 +133,6 @@ function serveStatic(distDir: string, reqUrl: string, res: http.ServerResponse) 
 		res.setHeader("Content-Type", MIME[path.extname(filePath)] ?? "application/octet-stream");
 		res.end(data);
 	});
-}
-
-function localIp(): string {
-	for (const addrs of Object.values(os.networkInterfaces())) {
-		for (const addr of addrs ?? []) {
-			if (addr.family === "IPv4" && !addr.internal) return addr.address;
-		}
-	}
-	return "127.0.0.1";
 }
 
 export function setState(next: RemoteState) {

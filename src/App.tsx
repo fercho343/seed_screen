@@ -194,6 +194,15 @@ function App() {
 		[liveSlideId, clearLive],
 	);
 
+	const reorderServiceItems = useCallback((fromIndex: number, toIndex: number) => {
+		setService((prev) => {
+			const next = [...prev];
+			const [moved] = next.splice(fromIndex, 1);
+			next.splice(toIndex, 0, moved);
+			return next;
+		});
+	}, []);
+
 	const sendToLive = useCallback(
 		async (item: ServiceItem, slide: ServiceSlide) => {
 			if (!outputOpen) return;
@@ -268,23 +277,43 @@ function App() {
 		if (!selectedItem) return;
 		const slides = selectedItem.slides;
 		const idx = slides.findIndex((s) => s.id === selectedSlide?.id);
-		const next = slides[idx + 1] ?? slides[0];
+		const next = slides[idx + 1];
 		if (next) {
 			setSelectedSlide(next);
 			sendToLive(selectedItem, next);
+			return;
 		}
-	}, [selectedItem, selectedSlide, sendToLive]);
+		// Last slide of this item: advance to the next service item's first slide.
+		const itemIdx = service.findIndex((it) => it.scheduleId === selectedItem.scheduleId);
+		const nextItem = service[itemIdx + 1];
+		const nextSlide = nextItem?.slides[0];
+		if (nextItem && nextSlide) {
+			setSelectedItemId(nextItem.scheduleId);
+			setSelectedSlide(nextSlide);
+			sendToLive(nextItem, nextSlide);
+		}
+	}, [selectedItem, selectedSlide, service, sendToLive]);
 
 	const goPrev = useCallback(() => {
 		if (!selectedItem) return;
 		const slides = selectedItem.slides;
 		const idx = slides.findIndex((s) => s.id === selectedSlide?.id);
-		const prev = slides[idx - 1] ?? slides[slides.length - 1];
+		const prev = slides[idx - 1];
 		if (prev) {
 			setSelectedSlide(prev);
 			sendToLive(selectedItem, prev);
+			return;
 		}
-	}, [selectedItem, selectedSlide, sendToLive]);
+		// First slide of this item: go back to the previous service item's last slide.
+		const itemIdx = service.findIndex((it) => it.scheduleId === selectedItem.scheduleId);
+		const prevItem = service[itemIdx - 1];
+		const prevSlide = prevItem?.slides[prevItem.slides.length - 1];
+		if (prevItem && prevSlide) {
+			setSelectedItemId(prevItem.scheduleId);
+			setSelectedSlide(prevSlide);
+			sendToLive(prevItem, prevSlide);
+		}
+	}, [selectedItem, selectedSlide, service, sendToLive]);
 
 	const goLiveById = useCallback(
 		(itemId: string, slideId: string) => {
@@ -436,6 +465,7 @@ function App() {
 					onSlideDoubleClick={activateSlide}
 					onItemLanguageChange={setItemLanguage}
 					onSlideLanguageChange={setSlideLanguage}
+					onReorderItems={reorderServiceItems}
 				/>
 				<PreviewPanel
 					outputOpen={outputOpen}

@@ -2,12 +2,14 @@ import {
 	BookOpen,
 	Clapperboard,
 	Clipboard,
+	GripVertical,
 	Image,
 	Languages,
 	Music,
 	SquarePlay,
 	X,
 } from "lucide-react";
+import { useState } from "react";
 import {
 	Select,
 	SelectContent,
@@ -120,6 +122,7 @@ interface ServiceListProps {
 	onSlideDoubleClick: (item: ServiceItem, slide: ServiceSlide) => void;
 	onItemLanguageChange: (scheduleId: string, lang: string | null) => void;
 	onSlideLanguageChange: (scheduleId: string, slideId: string, value: string) => void;
+	onReorderItems: (fromIndex: number, toIndex: number) => void;
 }
 
 export function ServiceList({
@@ -133,8 +136,11 @@ export function ServiceList({
 	onSlideDoubleClick,
 	onItemLanguageChange,
 	onSlideLanguageChange,
+	onReorderItems,
 }: ServiceListProps) {
 	const selectedItem = items.find((item) => item.scheduleId === selectedItemId);
+	const [dragIndex, setDragIndex] = useState<number | null>(null);
+	const [overIndex, setOverIndex] = useState<number | null>(null);
 
 	if (items.length === 0) {
 		return (
@@ -172,12 +178,33 @@ export function ServiceList({
 							key={item.scheduleId}
 							role="button"
 							tabIndex={0}
+							draggable
 							onClick={() => onSelectItem(item.scheduleId)}
+							onDragStart={() => setDragIndex(index)}
+							onDragOver={(e) => {
+								e.preventDefault();
+								if (index !== overIndex) setOverIndex(index);
+							}}
+							onDragEnd={() => {
+								setDragIndex(null);
+								setOverIndex(null);
+							}}
+							onDrop={(e) => {
+								e.preventDefault();
+								if (dragIndex !== null && dragIndex !== index) onReorderItems(dragIndex, index);
+								setDragIndex(null);
+								setOverIndex(null);
+							}}
 							className={cn(
 								"group flex items-center gap-2 rounded-md px-2 py-2 cursor-pointer",
 								selectedItemId === item.scheduleId ? "bg-hover" : "hover:bg-hover",
+								overIndex === index && dragIndex !== null && dragIndex !== index
+									? "border-t-2 border-primary"
+									: "",
+								dragIndex === index ? "opacity-50" : "",
 							)}
 						>
+							<GripVertical className="size-3.5 shrink-0 cursor-grab text-text-3 opacity-0 group-hover:opacity-100" />
 							<div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-primary to-accent-2 text-[10px] font-bold text-white">
 								{index + 1}
 							</div>

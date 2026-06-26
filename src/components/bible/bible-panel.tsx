@@ -1,8 +1,16 @@
 import { BookOpen, ChevronLeft, Loader2, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { BibleBook, BibleVerse } from "../../../electron/electron-env";
+import type { BibleBook, BibleLang, BibleVerse } from "../../../electron/electron-env";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { LANG_NAMES } from "@/lib/languages";
 import type { ServiceItem } from "@/lib/service-types";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +40,7 @@ function verseRange(nums: number[]): string {
 }
 
 export function BiblePanel({ onAddToService }: BiblePanelProps) {
+	const [lang, setLang] = useState<BibleLang>("es");
 	const [books, setBooks] = useState<BibleBook[]>([]);
 	const [bookQuery, setBookQuery] = useState("");
 	const [level, setLevel] = useState<Level>("book");
@@ -42,19 +51,29 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 	const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
 
 	useEffect(() => {
-		window.electronAPI.bibleGetBooks().then(setBooks);
-	}, []);
+		window.electronAPI.bibleGetBooks(lang).then(setBooks);
+	}, [lang]);
+
+	// Switching language while browsing would leave book/chapter names from the
+	// old language on screen, so just go back to the book list.
+	const changeLang = (next: BibleLang) => {
+		setLang(next);
+		setLevel("book");
+		setSelectedBook(null);
+		setSelectedChapter(null);
+		setVerses(null);
+	};
 
 	useEffect(() => {
 		if (!selectedBook || !selectedChapter) return;
 		setLoadingVerses(true);
 		setVerses(null);
 		setSelectedVerses([]);
-		window.electronAPI.bibleGetChapter(selectedBook.id, selectedChapter).then((v) => {
+		window.electronAPI.bibleGetChapter(selectedBook.id, selectedChapter, lang).then((v) => {
 			setVerses(v);
 			setLoadingVerses(false);
 		});
-	}, [selectedBook, selectedChapter]);
+	}, [selectedBook, selectedChapter, lang]);
 
 	const filteredBooks = useMemo(() => {
 		const q = bookQuery.trim().toLowerCase();
@@ -95,7 +114,7 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 		);
 	};
 
-	const addVerses = (nums: number[]) => {
+	const addVerses = async (nums: number[]) => {
 		if (!nums.length || !verses || !selectedBook || !selectedChapter) return;
 		const chosen = verses
 			.filter((v) => nums.includes(v.v))
@@ -103,19 +122,35 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 		if (!chosen.length) return;
 		const range = verseRange(nums);
 		const ref = `${selectedBook.name} ${selectedChapter}:${range}`;
+
+		// Fetch the other language's text for the same verses so the item can be
+		// switched between languages later from the Service list, same as songs.
+		const otherLang: BibleLang = lang === "es" ? "en" : "es";
+		const otherVerses = await window.electronAPI.bibleGetChapter(
+			selectedBook.id,
+			selectedChapter,
+			otherLang,
+		);
+		const otherTextByVerse = new Map(otherVerses.map((v) => [v.v, v.t]));
+
 		onAddToService({
 			sourceId: `bible-${selectedBook.id}-${selectedChapter}-${range}-${Date.now()}`,
 			type: "bible",
 			title: ref,
+			language: lang,
 			// One slide per verse so each can be projected on its own. The reference
 			// (e.g. "Génesis 3:4") shows as a small heading on the output; the text
 			// is the clean verse without the leading number.
-			slides: chosen.map((v) => ({
-				id: crypto.randomUUID(),
-				label: `${selectedBook.name} ${selectedChapter}:${v.v}`,
-				reference: `${selectedBook.name} ${selectedChapter}:${v.v}`,
-				text: v.t,
-			})),
+			slides: chosen.map((v) => {
+				const otherText = otherTextByVerse.get(v.v);
+				return {
+					id: crypto.randomUUID(),
+					label: `${selectedBook.name} ${selectedChapter}:${v.v}`,
+					reference: `${selectedBook.name} ${selectedChapter}:${v.v}`,
+					text: v.t,
+					translations: otherText ? { [otherLang]: otherText } : undefined,
+				};
+			}),
 		});
 		setSelectedVerses([]);
 	};
@@ -124,15 +159,26 @@ export function BiblePanel({ onAddToService }: BiblePanelProps) {
 		return (
 			<div className="flex h-full flex-col">
 				<div className="border-b border-border p-2.5">
-					<div className="relative">
-						<Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-3" />
-						<Input
-							type="search"
-							value={bookQuery}
-							onChange={(e) => setBookQuery(e.target.value)}
-							placeholder="Search books..."
-							className="h-8 border-border bg-input pl-8 text-xs"
-						/>
+					<div className="flex gap-1.5">
+						<div className="relative flex-1">
+							<Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-3" />
+							<Input
+								type="search"
+								value={bookQuery}
+								onChange={(e) => setBookQuery(e.target.value)}
+								placeholder="Search books..."
+								className="h-8 border-border bg-input pl-8 text-xs"
+							/>
+						</div>
+						<Select value={lang} onValueChange={(v) => v && changeLang(v as BibleLang)}>
+							<SelectTrigger size="sm" className="h-8 w-[88px] border-border bg-input text-xs">
+								<SelectValue>{(v: string) => LANG_NAMES[v] ?? v}</SelectValue>
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="es">{LANG_NAMES.es}</SelectItem>
+								<SelectItem value="en">{LANG_NAMES.en}</SelectItem>
+							</SelectContent>
+						</Select>
 					</div>
 				</div>
 				<div className="flex-1 overflow-y-auto p-1.5">

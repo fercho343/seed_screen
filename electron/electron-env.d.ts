@@ -27,6 +27,8 @@ export interface SyncPeer {
 	songCount: number;
 }
 
+export type BibleLang = "es" | "en";
+
 export interface BibleBook {
 	id: string;
 	name: string;
@@ -194,9 +196,9 @@ export interface ElectronAPI {
 	onRemoteCommand: (cb: (cmd: RemoteCommand) => void) => void;
 	onRemoteStatusChanged: (cb: (status: RemoteStatus) => void) => void;
 	onOpenSettings: (cb: () => void) => void;
-	bibleGetBooks: () => Promise<BibleBook[]>;
-	bibleGetChapter: (bookId: string, chapterNum: number) => Promise<BibleVerse[]>;
-	bibleSearch: (query: string) => Promise<BibleSearchResult[]>;
+	bibleGetBooks: (lang: BibleLang) => Promise<BibleBook[]>;
+	bibleGetChapter: (bookId: string, chapterNum: number, lang: BibleLang) => Promise<BibleVerse[]>;
+	bibleSearch: (query: string, lang: BibleLang) => Promise<BibleSearchResult[]>;
 	outputToggle: (displayId?: number) => Promise<{ opened: boolean }>;
 	outputGetStatus: () => Promise<{ isOpen: boolean }>;
 	outputSendSlide: (slide: LiveSlidePayload) => Promise<boolean>;

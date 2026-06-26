@@ -53,10 +53,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	onRemoteStatusChanged: (cb: (status: { active: boolean; url: string | null }) => void) =>
 		ipcRenderer.on("remote:status-changed", (_event, status) => cb(status)),
 	onOpenSettings: (cb: () => void) => ipcRenderer.on("open-settings", () => cb()),
-	bibleGetBooks: () => ipcRenderer.invoke("bible:get-books"),
-	bibleGetChapter: (bookId: string, chapterNum: number) =>
-		ipcRenderer.invoke("bible:get-chapter", bookId, chapterNum),
-	bibleSearch: (query: string) => ipcRenderer.invoke("bible:search", query),
+	bibleGetBooks: (lang: "es" | "en") => ipcRenderer.invoke("bible:get-books", lang),
+	bibleGetChapter: (bookId: string, chapterNum: number, lang: "es" | "en") =>
+		ipcRenderer.invoke("bible:get-chapter", bookId, chapterNum, lang),
+	bibleSearch: (query: string, lang: "es" | "en") =>
+		ipcRenderer.invoke("bible:search", query, lang),
 	outputToggle: (displayId?: number) => ipcRenderer.invoke("output:toggle", displayId),
 	outputGetStatus: () => ipcRenderer.invoke("output:get-status"),
 	getDisplays: () => ipcRenderer.invoke("displays:get-all"),

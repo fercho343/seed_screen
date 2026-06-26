@@ -123,37 +123,52 @@ function pickAndAddMedia() {
 	}
 }
 
-interface BibleVerseItem {
-	type: string;
-	verse_numbers: number[];
-	lines: string[];
+type BibleLang = "es" | "en";
+
+interface BibleVerseFlat {
+	book_name: string;
+	book: number;
+	chapter: number;
+	verse: number;
+	text: string;
 }
 
-interface BibleChapter {
-	chapter_usfm?: string;
-	is_chapter?: boolean;
-	items: BibleVerseItem[];
+interface BibleLangData {
+	books: { id: string; name: string; abbr: string; chapterCount: number; index: number }[];
+	verses: BibleVerseFlat[];
 }
 
-interface BibleBookRaw {
-	book_usfm: string;
-	name: string;
-	chapters: BibleChapter[];
-}
+const bibleCache = new Map<BibleLang, BibleLangData>();
 
-interface BibleData {
-	books: BibleBookRaw[];
-}
-
-let bibleData: BibleData | null = null;
-
-function getBible(): BibleData {
-	if (bibleData) return bibleData;
-	const packagedPath = path.join(process.resourcesPath, "bible.json");
-	const devPath = path.join(__dirname, "../resources/bible.json");
+function getBibleLang(lang: BibleLang): BibleLangData {
+	const cached = bibleCache.get(lang);
+	if (cached) return cached;
+	const packagedPath = path.join(process.resourcesPath, "bible", `${lang}.json`);
+	const devPath = path.join(__dirname, "../resources/bible", `${lang}.json`);
 	const file = fs.existsSync(packagedPath) ? packagedPath : devPath;
-	bibleData = JSON.parse(fs.readFileSync(file, "utf-8"));
-	return bibleData as BibleData;
+	const raw = JSON.parse(fs.readFileSync(file, "utf-8")) as { verses: BibleVerseFlat[] };
+	// Strip the translator's italics markup (added/implied words) — it would
+	// otherwise render as literal "<i>...</i>" text on the projected screen.
+	const verses = raw.verses.map((v) => ({ ...v, text: v.text.replace(/<\/?i>/gi, "") }));
+	const chapterCounts = new Map<number, number>();
+	const bookNames = new Map<number, string>();
+	for (const v of verses) {
+		if (!bookNames.has(v.book)) bookNames.set(v.book, v.book_name);
+		if ((chapterCounts.get(v.book) ?? 0) < v.chapter) chapterCounts.set(v.book, v.chapter);
+	}
+	const books = BOOK_USFM_ORDER.map((usfm, i) => {
+		const bookNum = i + 1;
+		return {
+			id: usfm,
+			name: bookNames.get(bookNum) ?? usfm,
+			abbr: BOOK_ABBRS[usfm] ?? usfm,
+			chapterCount: chapterCounts.get(bookNum) ?? 0,
+			index: i,
+		};
+	});
+	const data: BibleLangData = { books, verses };
+	bibleCache.set(lang, data);
+	return data;
 }
 
 const BOOK_ABBRS: Record<string, string> = {
@@ -169,6 +184,10 @@ const BOOK_ABBRS: Record<string, string> = {
 	HEB: "Heb", JAS: "Jas", "1PE": "1Pe", "2PE": "2Pe", "1JN": "1Jn", "2JN": "2Jn",
 	"3JN": "3Jn", JUD: "Jud", REV: "Rev",
 };
+
+// Canonical Protestant book order — book 1 = Genesis ... book 66 = Revelation,
+// matching the numeric `book` field in resources/bible/{lang}.json.
+const BOOK_USFM_ORDER = Object.keys(BOOK_ABBRS);
 
 // In dev mode the app runs unpackaged, so Electron reports its own binary
 // name ("Electron") in the macOS menu bar unless we override it explicitly.
@@ -564,30 +583,26 @@ ipcMain.handle("media:delete", (_event, id: number) => {
 	return withUrl(getMedia());
 });
 
-ipcMain.handle("bible:get-books", () => {
-	return getBible().books.map((b, i) => ({
-		id: b.book_usfm,
-		name: b.name,
-		abbr: BOOK_ABBRS[b.book_usfm] ?? b.book_usfm,
-		chapterCount: b.chapters.filter((c) => c.is_chapter !== false).length,
-		index: i,
-	}));
+ipcMain.handle("bible:get-books", (_event, lang: BibleLang = "es") => {
+	return getBibleLang(lang).books;
 });
 
-ipcMain.handle("bible:get-chapter", (_event, bookId: string, chapterNum: number) => {
-	const book = getBible().books.find((b) => b.book_usfm === bookId);
-	if (!book) return [];
-	const chapters = book.chapters.filter((c) => c.is_chapter !== false);
-	const chapter = chapters[chapterNum - 1];
-	if (!chapter) return [];
-	return chapter.items
-		.filter((it) => it.type === "verse" && it.verse_numbers.length > 0)
-		.map((it) => ({ v: it.verse_numbers[0], t: it.lines.join(" ") }));
-});
+ipcMain.handle(
+	"bible:get-chapter",
+	(_event, bookId: string, chapterNum: number, lang: BibleLang = "es") => {
+		const bookNum = BOOK_USFM_ORDER.indexOf(bookId) + 1;
+		if (bookNum === 0) return [];
+		return getBibleLang(lang)
+			.verses.filter((v) => v.book === bookNum && v.chapter === chapterNum)
+			.sort((a, b) => a.verse - b.verse)
+			.map((v) => ({ v: v.verse, t: v.text }));
+	},
+);
 
-ipcMain.handle("bible:search", (_event, query: string) => {
+ipcMain.handle("bible:search", (_event, query: string, lang: BibleLang = "es") => {
 	if (!query || query.length < 3) return [];
 	const q = query.toLowerCase();
+	const data = getBibleLang(lang);
 	const results: {
 		bookName: string;
 		abbr: string;
@@ -595,19 +610,11 @@ ipcMain.handle("bible:search", (_event, query: string) => {
 		verse: number;
 		text: string;
 	}[] = [];
-	for (const book of getBible().books) {
-		const abbr = BOOK_ABBRS[book.book_usfm] ?? book.book_usfm;
-		const chapters = book.chapters.filter((c) => c.is_chapter !== false);
-		for (let ci = 0; ci < chapters.length; ci++) {
-			for (const it of chapters[ci].items) {
-				if (it.type !== "verse" || !it.verse_numbers.length) continue;
-				const text = it.lines.join(" ");
-				if (text.toLowerCase().includes(q)) {
-					results.push({ bookName: book.name, abbr, chapter: ci + 1, verse: it.verse_numbers[0], text });
-					if (results.length >= 60) return results;
-				}
-			}
-		}
+	for (const v of data.verses) {
+		if (!v.text.toLowerCase().includes(q)) continue;
+		const abbr = data.books[v.book - 1]?.abbr ?? "";
+		results.push({ bookName: v.book_name, abbr, chapter: v.chapter, verse: v.verse, text: v.text });
+		if (results.length >= 60) return results;
 	}
 	return results;
 });

@@ -366,12 +366,25 @@ function App() {
 			else if (cmd.type === "showImage") {
 				const image = images.find((img) => img.id === cmd.id);
 				if (image) showImage(image);
-			}
+			} else if (cmd.type === "addToService") addToService(cmd.item);
+			else if (cmd.type === "reorderService") reorderServiceItems(cmd.fromIndex, cmd.toIndex);
 		});
 		return () => {
 			window.ipcRenderer.removeAllListeners("remote:command");
 		};
-	}, [goNext, goPrev, goBlack, goLiveById, selectItemById, toggleOutput, showLogo, showImage, images]);
+	}, [
+		goNext,
+		goPrev,
+		goBlack,
+		goLiveById,
+		selectItemById,
+		toggleOutput,
+		showLogo,
+		showImage,
+		images,
+		addToService,
+		reorderServiceItems,
+	]);
 
 	// Keep the remote control web app's snapshot in sync with the live app state.
 	useEffect(() => {

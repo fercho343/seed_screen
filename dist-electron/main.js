@@ -20565,11 +20565,52 @@ function isActive() {
 function getUrl() {
   return `http://${localIp()}:${PORT}`;
 }
+function sendJson(res, data) {
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "*"
+  });
+  res.end(JSON.stringify(data));
+}
+function bibleLang(value) {
+  return value === "en" ? "en" : "es";
+}
 function start$1(opts) {
   if (server) return;
   onCommand = opts.onCommand;
   state = EMPTY_STATE;
   server = http$1.createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    if (req.method === "GET" && url.pathname === "/api/library/songs") {
+      sendJson(res, opts.library.getSongs());
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/library/bible/books") {
+      sendJson(res, opts.library.getBibleBooks(bibleLang(url.searchParams.get("lang"))));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/library/bible/chapter") {
+      const bookId = url.searchParams.get("book") ?? "";
+      const chapter = Number(url.searchParams.get("chapter"));
+      sendJson(res, opts.library.getBibleChapter(bookId, chapter, bibleLang(url.searchParams.get("lang"))));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/library/media") {
+      sendJson(res, opts.library.getMedia());
+      return;
+    }
+    if (req.method === "GET" && url.pathname.startsWith("/api/media-file/")) {
+      const id2 = Number(url.pathname.slice("/api/media-file/".length));
+      const file = Number.isFinite(id2) ? opts.library.getMediaFile(id2) : null;
+      if (!file) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      res.setHeader("Content-Type", file.mimeType);
+      fs.createReadStream(file.filePath).pipe(res);
+      return;
+    }
     if (req.method === "GET" && req.url === "/api/events") {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -21094,7 +21135,21 @@ const templateMenu = [
             start$1({
               devServerUrl: VITE_DEV_SERVER_URL,
               distDir: RENDERER_DIST,
-              onCommand: (cmd) => win == null ? void 0 : win.webContents.send("remote:command", cmd)
+              onCommand: (cmd) => win == null ? void 0 : win.webContents.send("remote:command", cmd),
+              library: {
+                getSongs: () => getSongs(),
+                getBibleBooks: (lang) => getBibleLang(lang).books,
+                getBibleChapter: (bookId, chapter, lang) => getBibleChapterVerses(bookId, chapter, lang),
+                // `media://` URLs only resolve inside an Electron BrowserWindow, not a
+                // phone browser, so the remote gets its own HTTP-servable URL per item.
+                getMedia: () => getMedia().map((m) => ({ ...m, url: `/api/media-file/${m.id}` })),
+                getMediaFile: (id2) => {
+                  const record = getMedia().find((m) => m.id === id2);
+                  if (!record) return null;
+                  const mimeType = MEDIA_MIME[path.extname(record.filePath).toLowerCase()];
+                  return mimeType ? { filePath: record.filePath, mimeType } : null;
+                }
+              }
             });
             win == null ? void 0 : win.webContents.send("remote:status-changed", {
               active: true,
@@ -21234,16 +21289,17 @@ ipcMain$1.handle("media:delete", (_event, id2) => {
   }
   return withUrl(getMedia());
 });
+function getBibleChapterVerses(bookId, chapterNum, lang) {
+  const bookNum = BOOK_USFM_ORDER.indexOf(bookId) + 1;
+  if (bookNum === 0) return [];
+  return getBibleLang(lang).verses.filter((v) => v.book === bookNum && v.chapter === chapterNum).sort((a, b) => a.verse - b.verse).map((v) => ({ v: v.verse, t: v.text }));
+}
 ipcMain$1.handle("bible:get-books", (_event, lang = "es") => {
   return getBibleLang(lang).books;
 });
 ipcMain$1.handle(
   "bible:get-chapter",
-  (_event, bookId, chapterNum, lang = "es") => {
-    const bookNum = BOOK_USFM_ORDER.indexOf(bookId) + 1;
-    if (bookNum === 0) return [];
-    return getBibleLang(lang).verses.filter((v) => v.book === bookNum && v.chapter === chapterNum).sort((a, b) => a.verse - b.verse).map((v) => ({ v: v.verse, t: v.text }));
-  }
+  (_event, bookId, chapterNum, lang = "es") => getBibleChapterVerses(bookId, chapterNum, lang)
 );
 ipcMain$1.handle("bible:search", (_event, query, lang = "es") => {
   var _a2;

@@ -412,6 +412,22 @@ const templateMenu: MenuItemConstructorOptions[] = [
 							devServerUrl: VITE_DEV_SERVER_URL,
 							distDir: RENDERER_DIST,
 							onCommand: (cmd) => win?.webContents.send("remote:command", cmd),
+							library: {
+								getSongs: () => getSongs(),
+								getBibleBooks: (lang) => getBibleLang(lang).books,
+								getBibleChapter: (bookId, chapter, lang) =>
+									getBibleChapterVerses(bookId, chapter, lang),
+								// `media://` URLs only resolve inside an Electron BrowserWindow, not a
+								// phone browser, so the remote gets its own HTTP-servable URL per item.
+								getMedia: () =>
+									getMedia().map((m) => ({ ...m, url: `/api/media-file/${m.id}` })),
+								getMediaFile: (id) => {
+									const record = getMedia().find((m) => m.id === id);
+									if (!record) return null;
+									const mimeType = MEDIA_MIME[path.extname(record.filePath).toLowerCase()];
+									return mimeType ? { filePath: record.filePath, mimeType } : null;
+								},
+							},
 						});
 						win?.webContents.send("remote:status-changed", {
 							active: true,
@@ -583,20 +599,23 @@ ipcMain.handle("media:delete", (_event, id: number) => {
 	return withUrl(getMedia());
 });
 
+function getBibleChapterVerses(bookId: string, chapterNum: number, lang: BibleLang) {
+	const bookNum = BOOK_USFM_ORDER.indexOf(bookId) + 1;
+	if (bookNum === 0) return [];
+	return getBibleLang(lang)
+		.verses.filter((v) => v.book === bookNum && v.chapter === chapterNum)
+		.sort((a, b) => a.verse - b.verse)
+		.map((v) => ({ v: v.verse, t: v.text }));
+}
+
 ipcMain.handle("bible:get-books", (_event, lang: BibleLang = "es") => {
 	return getBibleLang(lang).books;
 });
 
 ipcMain.handle(
 	"bible:get-chapter",
-	(_event, bookId: string, chapterNum: number, lang: BibleLang = "es") => {
-		const bookNum = BOOK_USFM_ORDER.indexOf(bookId) + 1;
-		if (bookNum === 0) return [];
-		return getBibleLang(lang)
-			.verses.filter((v) => v.book === bookNum && v.chapter === chapterNum)
-			.sort((a, b) => a.verse - b.verse)
-			.map((v) => ({ v: v.verse, t: v.text }));
-	},
+	(_event, bookId: string, chapterNum: number, lang: BibleLang = "es") =>
+		getBibleChapterVerses(bookId, chapterNum, lang),
 );
 
 ipcMain.handle("bible:search", (_event, query: string, lang: BibleLang = "es") => {

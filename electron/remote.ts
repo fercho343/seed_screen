@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import type { BibleBook, BibleLang, BibleVerse, MediaRecord, SongRecord } from "./electron-env";
 import { localIp } from "./net-util";
 
 const PORT = 3849;
@@ -16,6 +17,25 @@ const MIME: Record<string, string> = {
 	".woff2": "font/woff2",
 	".json": "application/json; charset=utf-8",
 };
+
+export interface RemoteServiceSlideInput {
+	id: string;
+	label: string;
+	text: string;
+	reference?: string;
+	translations?: Record<string, string>;
+	mediaUrl?: string;
+	youtubeId?: string;
+}
+
+export interface RemoteServiceItemInput {
+	sourceId: string;
+	type: "song" | "bible" | "image" | "video" | "youtube";
+	title: string;
+	subtitle?: string;
+	language?: string;
+	slides: RemoteServiceSlideInput[];
+}
 
 export interface RemoteBackground {
 	type: "color" | "gradient";
@@ -72,7 +92,9 @@ export type RemoteCommand =
 	| { type: "goLive"; itemId: string; slideId: string }
 	| { type: "toggleOutput" }
 	| { type: "showLogo" }
-	| { type: "showImage"; id: string };
+	| { type: "showImage"; id: string }
+	| { type: "addToService"; item: RemoteServiceItemInput }
+	| { type: "reorderService"; fromIndex: number; toIndex: number };
 
 const EMPTY_STATE: RemoteState = {
 	outputOpen: false,
@@ -94,12 +116,22 @@ let state: RemoteState = EMPTY_STATE;
 let onCommand: ((cmd: RemoteCommand) => void) | null = null;
 const clients = new Set<http.ServerResponse>();
 
+export interface RemoteLibrary {
+	getSongs: () => SongRecord[];
+	getBibleBooks: (lang: BibleLang) => BibleBook[];
+	getBibleChapter: (bookId: string, chapter: number, lang: BibleLang) => BibleVerse[];
+	getMedia: () => MediaRecord[];
+	getMediaFile: (id: number) => { filePath: string; mimeType: string } | null;
+}
+
 export interface StartOptions {
 	/** Set in dev (vite-plugin-electron sets process.env.VITE_DEV_SERVER_URL); the web app is proxied from there. */
 	devServerUrl?: string;
 	/** Built renderer directory (contains index.html + remote.html) used in production. */
 	distDir: string;
 	onCommand: (cmd: RemoteCommand) => void;
+	/** Read-only data the Library page needs — the remote is a plain browser page with no IPC access. */
+	library: RemoteLibrary;
 }
 
 async function serveDev(devServerUrl: string, reqUrl: string, res: http.ServerResponse) {
@@ -149,11 +181,55 @@ export function getUrl(): string {
 	return `http://${localIp()}:${PORT}`;
 }
 
+function sendJson(res: http.ServerResponse, data: unknown) {
+	res.writeHead(200, {
+		"Content-Type": "application/json; charset=utf-8",
+		"Access-Control-Allow-Origin": "*",
+	});
+	res.end(JSON.stringify(data));
+}
+
+function bibleLang(value: string | null): BibleLang {
+	return value === "en" ? "en" : "es";
+}
+
 export function start(opts: StartOptions) {
 	if (server) return;
 	onCommand = opts.onCommand;
 	state = EMPTY_STATE;
 	server = http.createServer((req, res) => {
+		const url = new URL(req.url ?? "/", "http://localhost");
+
+		if (req.method === "GET" && url.pathname === "/api/library/songs") {
+			sendJson(res, opts.library.getSongs());
+			return;
+		}
+		if (req.method === "GET" && url.pathname === "/api/library/bible/books") {
+			sendJson(res, opts.library.getBibleBooks(bibleLang(url.searchParams.get("lang"))));
+			return;
+		}
+		if (req.method === "GET" && url.pathname === "/api/library/bible/chapter") {
+			const bookId = url.searchParams.get("book") ?? "";
+			const chapter = Number(url.searchParams.get("chapter"));
+			sendJson(res, opts.library.getBibleChapter(bookId, chapter, bibleLang(url.searchParams.get("lang"))));
+			return;
+		}
+		if (req.method === "GET" && url.pathname === "/api/library/media") {
+			sendJson(res, opts.library.getMedia());
+			return;
+		}
+		if (req.method === "GET" && url.pathname.startsWith("/api/media-file/")) {
+			const id = Number(url.pathname.slice("/api/media-file/".length));
+			const file = Number.isFinite(id) ? opts.library.getMediaFile(id) : null;
+			if (!file) {
+				res.writeHead(404);
+				res.end();
+				return;
+			}
+			res.setHeader("Content-Type", file.mimeType);
+			fs.createReadStream(file.filePath).pipe(res);
+			return;
+		}
 		if (req.method === "GET" && req.url === "/api/events") {
 			res.writeHead(200, {
 				"Content-Type": "text/event-stream",

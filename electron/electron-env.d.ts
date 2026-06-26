@@ -157,6 +157,25 @@ export interface RemoteState {
 	images: RemoteImage[];
 }
 
+export interface RemoteServiceSlideInput {
+	id: string;
+	label: string;
+	text: string;
+	reference?: string;
+	translations?: Record<string, string>;
+	mediaUrl?: string;
+	youtubeId?: string;
+}
+
+export interface RemoteServiceItemInput {
+	sourceId: string;
+	type: "song" | "bible" | "image" | "video" | "youtube";
+	title: string;
+	subtitle?: string;
+	language?: string;
+	slides: RemoteServiceSlideInput[];
+}
+
 export type RemoteCommand =
 	| { type: "next" }
 	| { type: "prev" }
@@ -165,7 +184,9 @@ export type RemoteCommand =
 	| { type: "goLive"; itemId: string; slideId: string }
 	| { type: "toggleOutput" }
 	| { type: "showLogo" }
-	| { type: "showImage"; id: string };
+	| { type: "showImage"; id: string }
+	| { type: "addToService"; item: RemoteServiceItemInput }
+	| { type: "reorderService"; fromIndex: number; toIndex: number };
 
 export interface ElectronAPI {
 	settingsGetAll: () => Promise<{

@@ -1,0 +1,75 @@
+name: Release
+
+# Builds and publishes desktop installers (macOS, Windows, Linux) whenever a
+# version tag is pushed (e.g. v1.0.0, v1.0.1, ...). Each OS builds and uploads
+# its own installer to the same GitHub Release (matched by tag name).
+#
+# The release is created as a DRAFT by electron-builder — review the generated
+# notes/assets on the repo's Releases page and publish it manually when ready.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # No Apple Developer identity is configured in this repo — skip macOS
+      # codesigning auto-discovery instead of letting electron-builder hunt for
+      # (and fail to find) a signing certificate on the runner.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          # LTS, not the very latest — better-sqlite3's native bindings need a
+          # version with prebuilt binaries already published; bleeding-edge
+          # releases (e.g. 24.x right after launch) can lag behind and force a
+          # from-source compile that fails on the runner.
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        # Errors only (not `npm run lint`'s --max-warnings 0): a few vendored
+        # shadcn/ui template files trip react-refresh/only-export-components by
+        # design (component + variants helper in one file) — that's expected
+        # there and shouldn't block a release. Real errors still fail the build.
+        run: npx eslint . --ext ts,tsx --quiet
+
+      - name: Build renderer + main process
+        run: npx vite build
+
+      - name: Rebuild native modules for this Electron version
+        run: npx electron-rebuild
+
+      - name: Package and publish to GitHub Releases
+        run: >-
+          npx electron-builder
+          --publish always
+          --config.publish.provider=github
+          --config.publish.owner=fercho343
+          --config.publish.repo=seed_screen

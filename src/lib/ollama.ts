@@ -78,7 +78,7 @@ Do not add any explanation, intro text, or commentary. Just the raw lyrics with 
 	const reader = res.body.getReader();
 	const decoder = new TextDecoder();
 	let full = "";
-	while (true) {
+	for (;;) {
 		const { done, value } = await reader.read();
 		if (done) break;
 		for (const line of decoder.decode(value).split("\n")) {
@@ -147,7 +147,7 @@ async function streamOllama(
 	const reader = res.body.getReader();
 	const decoder = new TextDecoder();
 	let full = "";
-	while (true) {
+	for (;;) {
 		const { done, value } = await reader.read();
 		if (done) break;
 		for (const line of decoder.decode(value).split("\n")) {
